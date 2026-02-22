@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # ─── PostgreSQL Database ───
+  postgres:
+    image: postgres:16-alpine
+    container_name: bookflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bookflow
+      POSTGRES_PASSWORD: bookflow_secret
+      POSTGRES_DB: bookflow
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bookflow']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis Cache & Sessions ───
+  redis:
+    image: redis:7-alpine
+    container_name: bookflow-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── BookFlow App (Production) ───
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bookflow-app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgresql://bookflow:bookflow_secret@postgres:5432/bookflow?schema=public
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+  redis_data:

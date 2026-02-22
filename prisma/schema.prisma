@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum FileType {
+  PDF
+  EPUB
+  DOCX
+  TXT
+}
+
+enum BookStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+// ═══════════════════════════════════════
+// User
+// ═══════════════════════════════════════
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  googleId     String?  @unique
+  role         Role     @default(USER)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  books       Book[]
+  bookmarks   Bookmark[]
+  highlights  Highlight[]
+  progress    ReadingProgress[]
+  sessions    ReadingSession[]
+  preferences UserPreferences?
+
+  @@index([email])
+}
+
+// ═══════════════════════════════════════
+// Book
+// ═══════════════════════════════════════
+
+model Book {
+  id         String     @id @default(cuid())
+  title      String
+  author     String?
+  totalPages Int        @default(0)
+  totalWords Int        @default(0)
+  fileUrl    String
+  fileType   FileType
+  coverUrl   String?
+  metadata   Json?
+  status     BookStatus @default(PROCESSING)
+  userId     String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmarks  Bookmark[]
+  highlights Highlight[]
+  progress   ReadingProgress[]
+  sessions   ReadingSession[]
+  pages      BookPage[]
+
+  @@index([userId])
+  @@index([title])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════
+// BookPage — Parsed page content
+// ═══════════════════════════════════════
+
+model BookPage {
+  id         String @id @default(cuid())
+  bookId     String
+  pageNumber Int
+  content    String @db.Text
+  wordCount  Int    @default(0)
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, pageNumber])
+  @@index([bookId])
+}
+
+// ═══════════════════════════════════════
+// Bookmark
+// ═══════════════════════════════════════
+
+model Bookmark {
+  id         String   @id @default(cuid())
+  userId     String
+  bookId     String
+  pageNumber Int
+  wordIndex  Int?
+  note       String?
+  color      String   @default("#FFD700")
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+// ═══════════════════════════════════════
+// Highlight
+// ═══════════════════════════════════════
+
+model Highlight {
+  id          String   @id @default(cuid())
+  userId      String
+  bookId      String
+  pageNumber  Int
+  startOffset Int
+  endOffset   Int
+  text        String
+  color       String   @default("#FFFF00")
+  note        String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+// ═══════════════════════════════════════
+// ReadingProgress
+// ═══════════════════════════════════════
+
+model ReadingProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  bookId       String
+  currentPage  Int      @default(0)
+  wordIndex    Int      @default(0)
+  scrollOffset Float    @default(0)
+  percentage   Float    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+// ═══════════════════════════════════════
+// ReadingSession
+// ═══════════════════════════════════════
+
+model ReadingSession {
+  id        String    @id @default(cuid())
+  userId    String
+  bookId    String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  pagesRead Int       @default(0)
+  wordsRead Int       @default(0)
+  duration  Int       @default(0) // seconds
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([bookId])
+  @@index([startedAt])
+}
+
+// ═══════════════════════════════════════
+// UserPreferences
+// ═══════════════════════════════════════
+
+model UserPreferences {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  theme           String  @default("dark")
+  primaryColor    String  @default("#6366F1")
+  fontFamily      String  @default("Inter")
+  fontSize        Int     @default(16)
+  lineSpacing     Float   @default(1.6)
+  marginSize      Int     @default(40)
+  bgTexture       String  @default("none")
+  animSpeed       Float   @default(1.0)
+  flipSound       Boolean @default(true)
+  flipVolume      Float   @default(0.5)
+  shadowIntensity Float   @default(0.5)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

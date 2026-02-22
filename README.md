@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📚 Bookmosphere — Immersive Flipbook Reading Platform
 
-## Getting Started
+A premium, full-stack reading platform built with **Next.js 15**, featuring a realistic flipbook reader engine, reading analytics, full-text search, and a dark-themed dashboard.
 
-First, run the development server:
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| **Flipbook Reader** | Page-turn animations with customizable speed, shadow, and sound effects |
+| **Book Upload** | PDF, EPUB, DOCX, TXT — processed and paginated server-side |
+| **Reading Progress** | Auto-saved progress, bookmarks, and page-by-page tracking |
+| **Analytics Dashboard** | Area/bar charts (Recharts), GitHub-style heatmap, reading streaks |
+| **Multi-Source Search** | Internal library + Google Books + OpenLibrary APIs |
+| **Theme Customization** | Dark/Light/Sepia modes, accent colors, typography, reader settings |
+| **Admin Panel** | User management, upload moderation, system stats |
+| **Security** | JWT auth, rate limiting, security headers, file validation with magic bytes |
+| **Responsive Design** | Mobile-first, dark-themed UI with smooth animations |
+
+## 🛠 Tech Stack
+
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS, Recharts
+- **Backend:** Next.js API Routes, Prisma ORM
+- **Database:** PostgreSQL
+- **Auth:** JWT (access + refresh tokens), bcrypt, HTTP-only cookies
+- **Storage:** AWS S3 (book files), local filesystem fallback
+- **State:** Zustand (auth, theme, reader stores)
+- **Deployment:** Docker, docker-compose
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 20+
+- PostgreSQL
+- npm
+
+### Setup
 
 ```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your database URL, JWT secrets, S3 credentials
+
+# 3. Initialize database
+npx prisma generate
+npx prisma db push
+
+# 4. Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Docker Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker-compose up -d
+```
 
-## Learn More
+This starts PostgreSQL, Redis, and the app in production mode.
 
-To learn more about Next.js, take a look at the following resources:
+## 📁 Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├── app/
+│   ├── (auth)/          # Login, Register pages
+│   ├── (dashboard)/     # Dashboard, Library, Analytics, Search, Settings
+│   ├── admin/           # Admin panel (role-protected)
+│   ├── reader/          # Flipbook reader page
+│   └── api/             # API routes (auth, books, sessions, search, etc.)
+├── components/          # Shared UI components
+├── hooks/               # Custom React hooks
+├── lib/                 # Server utilities (auth, prisma, s3, validators)
+├── stores/              # Zustand state stores
+└── types/               # TypeScript type definitions
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔐 Environment Variables
 
-## Deploy on Vercel
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_ACCESS_SECRET` | JWT signing secret (min 32 chars) |
+| `JWT_REFRESH_SECRET` | Refresh token signing secret |
+| `AWS_ACCESS_KEY_ID` | S3 access key |
+| `AWS_SECRET_ACCESS_KEY` | S3 secret key |
+| `AWS_S3_BUCKET` | S3 bucket name |
+| `AWS_REGION` | S3 region |
+| `GOOGLE_BOOKS_API_KEY` | Google Books API key (optional) |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
