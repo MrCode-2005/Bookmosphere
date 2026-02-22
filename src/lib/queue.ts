@@ -8,7 +8,7 @@ const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", 
 // ─── Book Processing Queue ───
 
 export const bookProcessingQueue = new Queue("book-processing", {
-    connection,
+    connection: connection as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     defaultJobOptions: {
         attempts: 3,
         backoff: {

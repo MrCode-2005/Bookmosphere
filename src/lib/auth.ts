@@ -5,8 +5,8 @@ import type { JWTPayload, AuthTokens } from "@/types";
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "dev-access-secret";
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "dev-refresh-secret";
-const ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY || "15m";
-const REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "7d";
+const ACCESS_EXPIRY = 15 * 60;        // 15 minutes in seconds
+const REFRESH_EXPIRY = 7 * 24 * 3600; // 7 days in seconds
 
 // ─── Password Hashing ───
 
@@ -24,24 +24,24 @@ export async function verifyPassword(
 // ─── Token Generation ───
 
 export function generateTokens(payload: JWTPayload): AuthTokens {
-    const accessToken = jwt.sign(payload, ACCESS_SECRET, {
+    const accessToken = jwt.sign(payload, ACCESS_SECRET as jwt.Secret, {
         expiresIn: ACCESS_EXPIRY,
     });
-    const refreshToken = jwt.sign(payload, REFRESH_SECRET, {
+    const refreshToken = jwt.sign(payload, REFRESH_SECRET as jwt.Secret, {
         expiresIn: REFRESH_EXPIRY,
     });
     return { accessToken, refreshToken };
 }
 
 export function generateAccessToken(payload: JWTPayload): string {
-    return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRY });
+    return jwt.sign(payload, ACCESS_SECRET as jwt.Secret, { expiresIn: ACCESS_EXPIRY });
 }
 
 // ─── Token Verification ───
 
 export function verifyAccessToken(token: string): JWTPayload | null {
     try {
-        return jwt.verify(token, ACCESS_SECRET) as JWTPayload;
+        return jwt.verify(token, ACCESS_SECRET as jwt.Secret) as JWTPayload;
     } catch {
         return null;
     }
@@ -49,7 +49,7 @@ export function verifyAccessToken(token: string): JWTPayload | null {
 
 export function verifyRefreshToken(token: string): JWTPayload | null {
     try {
-        return jwt.verify(token, REFRESH_SECRET) as JWTPayload;
+        return jwt.verify(token, REFRESH_SECRET as jwt.Secret) as JWTPayload;
     } catch {
         return null;
     }

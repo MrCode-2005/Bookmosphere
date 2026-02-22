@@ -18,7 +18,8 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedBookData> {
         const page = await doc.getPage(i);
         const textContent = await page.getTextContent();
         const content = textContent.items
-            .map((item: { str?: string }) => item.str || "")
+            .filter((item): item is typeof item & { str: string } => "str" in item)
+            .map((item) => item.str || "")
             .join(" ");
 
         const wordCount = content.split(/\s+/).filter(Boolean).length;
@@ -38,9 +39,9 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedBookData> {
     // Extract TOC (outlines/bookmarks)
     const outline = await doc.getOutline();
     const toc = outline
-        ? outline.map((item: { title: string; dest?: unknown[] }, index: number) => ({
+        ? outline.map((item, index) => ({
             title: item.title,
-            pageNumber: index + 1, // Will be resolved properly in Phase 3
+            pageNumber: index + 1,
             level: 0,
         }))
         : [];

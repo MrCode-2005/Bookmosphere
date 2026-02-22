@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { deleteFromS3 } from "@/lib/s3";
+import { deleteFile } from "@/lib/s3";
 
 // GET /api/admin/uploads — List all uploads (admin only)
 export async function GET(req: NextRequest) {
@@ -45,7 +45,7 @@ export async function DELETE(req: NextRequest) {
         // Delete from S3
         const s3Key = book.fileUrl.split(".amazonaws.com/")[1];
         if (s3Key) {
-            await deleteFromS3(s3Key);
+            await deleteFile(s3Key);
         }
 
         // Delete from DB (cascades to pages, bookmarks, etc.)
