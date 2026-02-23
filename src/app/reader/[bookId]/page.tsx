@@ -20,6 +20,8 @@ interface BookData {
     totalPages: number;
     totalWords: number;
     status: string;
+    fileType: string;
+    signedUrl?: string;
     pages: BookPage[];
 }
 
@@ -57,7 +59,7 @@ export default function ReaderPage() {
         return () => document.removeEventListener("fullscreenchange", handler);
     }, []);
 
-    // Font size
+    // Font size (only for text mode)
     const handleFontSizeChange = useCallback((delta: number) => {
         setFontSize((prev) => Math.max(12, Math.min(24, prev + delta)));
     }, []);
@@ -80,7 +82,7 @@ export default function ReaderPage() {
                 }
 
                 const data = await res.json();
-                const bookData = data.book || data.data;
+                const bookData = data.data || data.book;
 
                 if (bookData.status !== "READY") {
                     setError("Book is still processing. Please wait...");
@@ -108,10 +110,10 @@ export default function ReaderPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#1a1510]">
+            <div className="min-h-screen flex items-center justify-center bg-[#d5d0cb]">
                 <div className="text-center space-y-4">
-                    <div className="animate-spin w-8 h-8 border-2 border-amber-500/30 border-t-amber-500 rounded-full mx-auto" />
-                    <p className="text-amber-200/60 text-sm">Loading your book...</p>
+                    <div className="animate-spin w-8 h-8 border-2 border-gray-400/30 border-t-gray-500 rounded-full mx-auto" />
+                    <p className="text-gray-500 text-sm">Loading your book…</p>
                 </div>
             </div>
         );
@@ -119,10 +121,10 @@ export default function ReaderPage() {
 
     if (error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#1a1510]">
+            <div className="min-h-screen flex items-center justify-center bg-[#d5d0cb]">
                 <div className="text-center space-y-4">
-                    <p className="text-red-400">{error}</p>
-                    <button onClick={() => router.back()} className="text-amber-200/60 hover:text-amber-200 text-sm underline">
+                    <p className="text-red-500">{error}</p>
+                    <button onClick={() => router.back()} className="text-gray-600 hover:text-gray-800 text-sm underline">
                         Go back
                     </button>
                 </div>
@@ -130,28 +132,33 @@ export default function ReaderPage() {
         );
     }
 
-    if (!book || !book.pages?.length) {
+    const isPdf = book?.fileType === "PDF";
+
+    // For text books, require pages
+    if (!isPdf && (!book || !book.pages?.length)) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#1a1510]">
-                <p className="text-amber-200/60">No pages found in this book.</p>
+            <div className="min-h-screen flex items-center justify-center bg-[#d5d0cb]">
+                <p className="text-gray-500">No pages found in this book.</p>
             </div>
         );
     }
 
     return (
-        <div ref={containerRef} className="min-h-screen flex flex-col bg-[#1a1510]">
-            <ReaderHeader title={book.title} author={book.author} />
+        <div ref={containerRef} className="min-h-screen flex flex-col bg-[#d5d0cb]">
+            <ReaderHeader title={book!.title} author={book!.author} />
 
             <main className="flex-1 relative">
                 <FlipbookReader
-                    pages={book.pages}
+                    pages={isPdf ? undefined : book!.pages}
+                    pdfUrl={isPdf ? book!.signedUrl : undefined}
+                    fileType={book!.fileType}
+                    totalPages={book!.totalPages}
                     initialPage={savedPage}
                     fontSize={fontSize}
                     onFlip={playFlipSound}
                 />
 
-                {/* Auto-save progress */}
-                <AutoSaveProvider bookId={bookId} totalPages={book.pages.length} />
+                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
 
                 <ControlPanel
                     onToggleSound={toggleSound}
@@ -160,6 +167,7 @@ export default function ReaderPage() {
                     isFullscreen={isFullscreen}
                     onFontSizeChange={handleFontSizeChange}
                     fontSize={fontSize}
+                    isPdf={isPdf}
                 />
             </main>
 
@@ -168,7 +176,7 @@ export default function ReaderPage() {
     );
 }
 
-/** Listens to custom DOM events from FlipbookReader */
+/** Header — listens to custom DOM events from FlipbookReader */
 function ReaderHeader({ title, author }: { title: string; author: string | null }) {
     const router = useRouter();
     const [pageInfo, setPageInfo] = useState({ currentPage: 0, totalPages: 0 });
@@ -198,13 +206,15 @@ function ReaderHeader({ title, author }: { title: string; author: string | null 
                 {author && <p className="text-white/40 text-xs">{author}</p>}
             </div>
             <div className="text-white/40 text-xs">
-                {pageInfo.totalPages > 0 ? `Page ${pageInfo.currentPage + 1} of ${pageInfo.totalPages}` : ""}
+                {pageInfo.totalPages > 0
+                    ? `Page ${pageInfo.currentPage} of ${pageInfo.totalPages}`
+                    : ""}
             </div>
         </header>
     );
 }
 
-/** Progress bar — listens to custom events */
+/** Progress footer — listens to custom events */
 function ReaderFooter() {
     const [pageInfo, setPageInfo] = useState({ currentPage: 0, totalPages: 0 });
 
@@ -219,13 +229,13 @@ function ReaderFooter() {
 
     if (pageInfo.totalPages === 0) return null;
 
-    const progress = ((pageInfo.currentPage + 1) / pageInfo.totalPages) * 100;
+    const progress = (pageInfo.currentPage / pageInfo.totalPages) * 100;
 
     return (
         <div className="px-4 py-3 bg-black/40 backdrop-blur-sm z-20">
             <div className="flex items-center gap-3 max-w-3xl mx-auto">
                 <span className="text-white/40 text-xs font-mono min-w-[32px] text-right">
-                    {pageInfo.currentPage + 1}
+                    {pageInfo.currentPage}
                 </span>
                 <div className="relative flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div
