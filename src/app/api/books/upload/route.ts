@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { uploadFile } from "@/lib/s3";
 import { processBook } from "@/workers/bookProcessor";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const BUCKET = "books";
+
 const ALLOWED_TYPES: Record<string, string> = {
     "application/pdf": "PDF",
     "application/epub+zip": "EPUB",
@@ -12,22 +17,22 @@ const ALLOWED_TYPES: Record<string, string> = {
     "text/plain": "TXT",
 };
 
+// Step 1: Client calls this to get a signed upload URL + create book record
 export async function POST(req: NextRequest) {
     try {
         const payload = requireAuth(req);
-        const formData = await req.formData();
-        const file = formData.get("file") as File | null;
-        const title = formData.get("title") as string | null;
+        const body = await req.json();
+        const { fileName, fileSize, fileType: mimeType, title } = body;
 
-        if (!file) {
+        if (!fileName || !fileSize || !mimeType) {
             return NextResponse.json(
-                { success: false, error: "No file provided" },
+                { success: false, error: "fileName, fileSize, and fileType are required" },
                 { status: 400 }
             );
         }
 
-        // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
+        // Validate file size (50MB)
+        if (fileSize > 50 * 1024 * 1024) {
             return NextResponse.json(
                 { success: false, error: "File too large (max 50MB)" },
                 { status: 400 }
@@ -35,54 +40,75 @@ export async function POST(req: NextRequest) {
         }
 
         // Determine file type
-        const ext = file.name.split(".").pop()?.toLowerCase();
-        let fileType = ALLOWED_TYPES[file.type];
-        if (!fileType && ext) {
+        const ext = fileName.split(".").pop()?.toLowerCase();
+        let fileTypeLabel = ALLOWED_TYPES[mimeType];
+        if (!fileTypeLabel && ext) {
             const extMap: Record<string, string> = {
                 pdf: "PDF", epub: "EPUB", docx: "DOCX", txt: "TXT",
             };
-            fileType = extMap[ext];
+            fileTypeLabel = extMap[ext];
         }
 
-        if (!fileType) {
+        if (!fileTypeLabel) {
             return NextResponse.json(
                 { success: false, error: "Unsupported file type" },
                 { status: 400 }
             );
         }
 
-        // Upload file
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const key = `${payload.userId}/${Date.now()}-${file.name}`;
-        const fileUrl = await uploadFile(key, buffer, file.type);
+        // Generate storage key
+        const key = `${payload.userId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-        // Create book record
+        // Get signed upload URL from Supabase
+        const signRes = await fetch(
+            `${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${key}`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+            }
+        );
+
+        if (!signRes.ok) {
+            const errText = await signRes.text();
+            console.error("Failed to get signed URL:", errText);
+            return NextResponse.json(
+                { success: false, error: "Failed to prepare upload" },
+                { status: 500 }
+            );
+        }
+
+        const signData = await signRes.json();
+        const signedUrl = `${SUPABASE_URL}/storage/v1${signData.url}`;
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${key}`;
+
+        // Create book record in DB
         const book = await prisma.book.create({
             data: {
-                title: title || file.name.replace(/\.[^.]+$/, ""),
-                fileUrl,
-                fileType: fileType as "PDF" | "EPUB" | "DOCX" | "TXT",
+                title: title || fileName.replace(/\.[^.]+$/, ""),
+                fileUrl: publicUrl,
+                fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
                 totalPages: 0,
                 totalWords: 0,
                 status: "PROCESSING",
                 userId: payload.userId,
                 metadata: {
-                    originalName: file.name,
-                    fileSize: file.size,
+                    originalName: fileName,
+                    fileSize,
                     uploadedAt: new Date().toISOString(),
                     storageKey: key,
                 },
             },
         });
 
-        // Process book synchronously for now (in dev, without BullMQ)
-        // In production, this would be enqueued to BullMQ
-        processBook(book.id, key).catch((err) => {
-            console.error(`Failed to process book ${book.id}:`, err);
-        });
-
         return NextResponse.json({
             success: true,
+            uploadUrl: signedUrl,
+            bookId: book.id,
+            storageKey: key,
             book: {
                 id: book.id,
                 title: book.title,
@@ -97,9 +123,9 @@ export async function POST(req: NextRequest) {
                 { status: 401 }
             );
         }
-        console.error("Upload error:", error);
+        console.error("Upload init error:", error);
         return NextResponse.json(
-            { success: false, error: "Upload failed" },
+            { success: false, error: "Upload initialization failed" },
             { status: 500 }
         );
     }

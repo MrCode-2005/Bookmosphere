@@ -51,20 +51,57 @@ export default function LibraryPage() {
         if (!file || !accessToken) return;
 
         setUploading(true);
-        setUploadProgress("Uploading...");
+        setUploadProgress("Preparing upload...");
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const res = await fetch("/api/books/upload", {
+            // Step 1: Get signed upload URL
+            const initRes = await fetch("/api/books/upload", {
                 method: "POST",
-                headers: { Authorization: `Bearer ${accessToken}` },
-                body: formData,
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                }),
             });
 
-            if (res.ok) {
-                setUploadProgress("Processing book...");
+            const initData = await initRes.json();
+            if (!initRes.ok || !initData.success) {
+                throw new Error(initData.error || "Upload init failed");
+            }
+
+            // Step 2: Upload directly to Supabase
+            setUploadProgress("Uploading file...");
+            const uploadRes = await fetch(initData.uploadUrl, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": file.type || "application/octet-stream",
+                },
+                body: file,
+            });
+
+            if (!uploadRes.ok) {
+                throw new Error("Failed to upload file");
+            }
+
+            // Step 3: Confirm and process
+            setUploadProgress("Processing book...");
+            const confirmRes = await fetch("/api/books/upload/confirm", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    bookId: initData.bookId,
+                    storageKey: initData.storageKey,
+                }),
+            });
+
+            if (confirmRes.ok) {
                 setTimeout(() => {
                     fetchBooks();
                     setUploading(false);
@@ -72,15 +109,12 @@ export default function LibraryPage() {
                     setUploadProgress("");
                 }, 2000);
             } else {
-                const data = await res.json();
-                setUploadProgress(`Error: ${data.error || "Upload failed"}`);
-                setTimeout(() => {
-                    setUploading(false);
-                    setUploadProgress("");
-                }, 3000);
+                const data = await confirmRes.json();
+                throw new Error(data.error || "Processing failed");
             }
-        } catch {
-            setUploadProgress("Upload failed. Please try again.");
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Upload failed";
+            setUploadProgress(`Error: ${msg}`);
             setTimeout(() => {
                 setUploading(false);
                 setUploadProgress("");

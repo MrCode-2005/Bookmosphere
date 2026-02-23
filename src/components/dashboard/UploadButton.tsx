@@ -77,40 +77,61 @@ export function UploadButton() {
         setError("");
 
         try {
-            const formData = new FormData();
-            formData.append("file", selectedFile);
-            if (title) formData.append("title", title);
-
-            const xhr = new XMLHttpRequest();
-
-            xhr.upload.addEventListener("progress", (e) => {
-                if (e.lengthComputable) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    setProgress(pct);
-                    setUploadProgress(pct);
-                }
+            // Step 1: Get signed upload URL from our API
+            setProgress(5);
+            const initRes = await fetch("/api/books/upload", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    fileName: selectedFile.name,
+                    fileSize: selectedFile.size,
+                    fileType: selectedFile.type,
+                    title: title || undefined,
+                }),
             });
 
-            await new Promise<void>((resolve, reject) => {
-                xhr.onload = () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        resolve();
-                    } else {
-                        try {
-                            const data = JSON.parse(xhr.responseText);
-                            reject(new Error(data.error || "Upload failed"));
-                        } catch {
-                            reject(new Error("Upload failed"));
-                        }
-                    }
-                };
-                xhr.onerror = () => reject(new Error("Network error"));
+            const initData = await initRes.json();
+            if (!initRes.ok || !initData.success) {
+                throw new Error(initData.error || "Failed to initialize upload");
+            }
 
-                xhr.open("POST", "/api/books/upload");
-                xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
-                xhr.send(formData);
+            const { uploadUrl, bookId, storageKey } = initData;
+
+            // Step 2: Upload directly to Supabase Storage
+            setProgress(15);
+            const uploadRes = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": selectedFile.type || "application/octet-stream",
+                },
+                body: selectedFile,
             });
 
+            if (!uploadRes.ok) {
+                throw new Error("Failed to upload file to storage");
+            }
+
+            setProgress(80);
+
+            // Step 3: Confirm upload and trigger processing
+            const confirmRes = await fetch("/api/books/upload/confirm", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ bookId, storageKey }),
+            });
+
+            const confirmData = await confirmRes.json();
+            if (!confirmRes.ok || !confirmData.success) {
+                throw new Error(confirmData.error || "Failed to confirm upload");
+            }
+
+            setProgress(100);
             setSuccess(true);
             setUploadProgress(100);
 
