@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────
 interface SearchResult {
@@ -14,6 +13,7 @@ interface SearchResult {
     coverUrl?: string;
     description?: string;
     publishedDate?: string;
+    externalUrl?: string;
 }
 
 type SearchSource = "library" | "google" | "openlibrary";
@@ -187,8 +187,20 @@ function SearchResultCard({ result }: { result: SearchResult }) {
 
     const config = sourceConfig[result.source] || sourceConfig.library;
 
+    // For external results, make the whole card clickable
+    const handleCardClick = () => {
+        if (result.source === "library") {
+            window.location.href = `/reader/${result.id}`;
+        } else if (result.externalUrl) {
+            window.open(result.externalUrl, "_blank", "noopener,noreferrer");
+        }
+    };
+
     return (
-        <div className="bg-card border border-border rounded-xl p-4 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all group">
+        <div
+            onClick={handleCardClick}
+            className="bg-card border border-border rounded-xl p-4 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all group cursor-pointer"
+        >
             <div className="flex gap-4">
                 {/* Cover */}
                 <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
@@ -207,18 +219,9 @@ function SearchResultCard({ result }: { result: SearchResult }) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                            {result.source === "library" ? (
-                                <Link
-                                    href={`/reader/${result.id}`}
-                                    className="text-foreground font-medium hover:text-indigo-400 transition-colors block truncate"
-                                >
-                                    {result.title}
-                                </Link>
-                            ) : (
-                                <h3 className="text-foreground font-medium truncate">
-                                    {result.title}
-                                </h3>
-                            )}
+                            <h3 className="text-foreground font-medium truncate group-hover:text-indigo-400 transition-colors">
+                                {result.title}
+                            </h3>
                             {result.author && (
                                 <p className="text-muted-foreground text-sm mt-0.5 truncate">
                                     by {result.author}
@@ -242,13 +245,14 @@ function SearchResultCard({ result }: { result: SearchResult }) {
                                 📅 {result.publishedDate}
                             </span>
                         )}
-                        {result.source === "library" && (
-                            <Link
-                                href={`/reader/${result.id}`}
-                                className="text-indigo-400 text-xs hover:text-indigo-300 font-medium transition-colors"
-                            >
+                        {result.source === "library" ? (
+                            <span className="text-indigo-400 text-xs font-medium">
                                 Read →
-                            </Link>
+                            </span>
+                        ) : (
+                            <span className="text-indigo-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                View on {result.source === "google" ? "Google Books" : "OpenLibrary"} ↗
+                            </span>
                         )}
                     </div>
                 </div>

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
                     if (gRes.ok) {
                         const gData = await gRes.json();
                         results.push(
-                            ...(gData.items || []).map((item: { id: string; volumeInfo: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string }; description?: string; publishedDate?: string } }) => ({
+                            ...(gData.items || []).map((item: { id: string; volumeInfo: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string }; description?: string; publishedDate?: string; previewLink?: string } }) => ({
                                 source: "google" as const,
                                 id: item.id,
                                 title: item.volumeInfo?.title || "Untitled",
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
                                 coverUrl: item.volumeInfo?.imageLinks?.thumbnail,
                                 description: item.volumeInfo?.description,
                                 publishedDate: item.volumeInfo?.publishedDate,
+                                externalUrl: item.volumeInfo?.previewLink || `https://books.google.com/books?id=${item.id}`,
                             }))
                         );
                     }
@@ -85,6 +86,7 @@ export async function GET(req: NextRequest) {
                             author: doc.author_name?.join(", "),
                             coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined,
                             publishedDate: doc.first_publish_year?.toString(),
+                            externalUrl: doc.key ? `https://openlibrary.org${doc.key}` : undefined,
                         }))
                     );
                 }

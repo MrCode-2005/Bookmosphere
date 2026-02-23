@@ -33,7 +33,7 @@ export default function LibraryPage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                setBooks(data.books || []);
+                setBooks(data.data || data.books || []);
             }
         } catch {
             // Ignore
