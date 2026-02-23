@@ -41,7 +41,7 @@ export async function uploadFile(
             "Content-Type": contentType,
             "x-upsert": "true",
         },
-        body,
+        body: new Uint8Array(body),
     });
 
     if (!res.ok) {
