@@ -92,24 +92,27 @@ async function parsePdf(buffer: Buffer): Promise<{ pageNumber: number; content: 
     const { extractText, getDocumentProxy } = await import("unpdf");
 
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
-    const { totalPages, text: fullText } = await extractText(pdf, { mergePages: false });
+    const result = await extractText(pdf, { mergePages: false });
+    const totalPages = result.totalPages;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const textData = result.text as any;
 
     const pages: { pageNumber: number; content: string }[] = [];
 
-    if (Array.isArray(fullText)) {
-        // fullText is an array of strings, one per PDF page
-        for (let i = 0; i < fullText.length; i++) {
-            const pageText = fullText[i]?.trim();
-            if (pageText && pageText.length > 0) {
+    if (Array.isArray(textData)) {
+        // textData is an array of strings, one per PDF page
+        for (let i = 0; i < textData.length; i++) {
+            const pageText = String(textData[i] || "").trim();
+            if (pageText.length > 0) {
                 pages.push({
                     pageNumber: i + 1,
                     content: pageText,
                 });
             }
         }
-    } else if (typeof fullText === "string" && fullText.trim().length > 0) {
-        // Fallback: fullText is a single string — split into reading pages
-        const readingPages = splitTextIntoPages(fullText);
+    } else if (textData && String(textData).trim().length > 0) {
+        // Fallback: textData is a single string — split into reading pages
+        const readingPages = splitTextIntoPages(String(textData));
         pages.push(...readingPages);
     }
 
