@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 interface ControlPanelProps {
     onToggleSound: () => void;
@@ -9,7 +9,6 @@ interface ControlPanelProps {
     isFullscreen: boolean;
     onFontSizeChange: (delta: number) => void;
     fontSize: number;
-    isPdf?: boolean;
 }
 
 export default function ControlPanel({
@@ -19,7 +18,6 @@ export default function ControlPanel({
     isFullscreen,
     onFontSizeChange,
     fontSize,
-    isPdf = false,
 }: ControlPanelProps) {
     const [showFontMenu, setShowFontMenu] = useState(false);
 
@@ -68,44 +66,41 @@ export default function ControlPanel({
                 )}
             </ControlButton>
 
-            {/* Font size — only for text mode */}
-            {!isPdf && (
-                <>
-                    <ControlButton
-                        onClick={() => setShowFontMenu(!showFontMenu)}
-                        label="Font size"
-                        active={showFontMenu}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="4 7 4 4 20 4 20 7" />
-                            <line x1="9" y1="20" x2="15" y2="20" />
-                            <line x1="12" y1="4" x2="12" y2="20" />
-                        </svg>
-                    </ControlButton>
+            {/* Font size */}
+            <ControlButton
+                onClick={() => setShowFontMenu(!showFontMenu)}
+                label="Font size"
+                active={showFontMenu}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="4 7 4 4 20 4 20 7" />
+                    <line x1="9" y1="20" x2="15" y2="20" />
+                    <line x1="12" y1="4" x2="12" y2="20" />
+                </svg>
+            </ControlButton>
 
-                    {showFontMenu && (
-                        <div className="bg-black/80 backdrop-blur-md rounded-lg p-3 space-y-2 animate-in fade-in slide-in-from-right-2">
-                            <p className="text-white/50 text-[10px] uppercase tracking-wider">Font Size</p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => onFontSizeChange(-1)}
-                                    disabled={fontSize <= 12}
-                                    className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white/70 text-sm disabled:opacity-30 transition-all"
-                                >
-                                    A<span className="text-[10px]">-</span>
-                                </button>
-                                <span className="text-white/60 text-xs min-w-[28px] text-center font-mono">{fontSize}</span>
-                                <button
-                                    onClick={() => onFontSizeChange(1)}
-                                    disabled={fontSize >= 24}
-                                    className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white/70 text-sm disabled:opacity-30 transition-all"
-                                >
-                                    A<span className="text-xs">+</span>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </>
+            {/* Font size popover */}
+            {showFontMenu && (
+                <div className="bg-black/80 backdrop-blur-md rounded-lg p-3 space-y-2 animate-in fade-in slide-in-from-right-2">
+                    <p className="text-white/50 text-[10px] uppercase tracking-wider">Font Size</p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => onFontSizeChange(-1)}
+                            disabled={fontSize <= 12}
+                            className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white/70 text-sm disabled:opacity-30 transition-all"
+                        >
+                            A<span className="text-[10px]">-</span>
+                        </button>
+                        <span className="text-white/60 text-xs min-w-[28px] text-center font-mono">{fontSize}</span>
+                        <button
+                            onClick={() => onFontSizeChange(1)}
+                            disabled={fontSize >= 24}
+                            className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white/70 text-sm disabled:opacity-30 transition-all"
+                        >
+                            A<span className="text-xs">+</span>
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -3,55 +3,57 @@ import { readFile } from "@/lib/s3";
 
 /**
  * Process a book: read file, extract pages/text, save to DB.
- * - PDF: Only counts pages (rendering happens client-side via pdfjs-dist)
- * - TXT: Extracts text and splits into reading pages
+ * Supports TXT and PDF. Called after upload confirmation.
  */
 export async function processBook(bookId: string, storageKey: string) {
     console.log(`📖 Processing book ${bookId}...`);
 
     try {
+        // Read the file from storage
         const buffer = await readFile(storageKey);
         const book = await prisma.book.findUnique({ where: { id: bookId } });
         if (!book) throw new Error("Book not found");
 
-        let totalPages = 0;
-        let totalWords = 0;
         let pages: { pageNumber: number; content: string }[] = [];
+        let pdfPageCount = 0;
+        let pdfWordEstimate = 0;
 
         switch (book.fileType) {
-            case "PDF": {
-                // For PDFs, only count pages — rendering happens client-side
-                const result = await countPdfPages(buffer);
-                totalPages = result.totalPages;
-                totalWords = result.estimatedWords;
-                // No BookPage records created for PDFs
-                break;
-            }
             case "TXT":
                 pages = parseTxt(buffer.toString("utf-8"));
-                totalPages = pages.length;
-                totalWords = pages.reduce(
-                    (sum, p) => sum + p.content.split(/\s+/).filter(Boolean).length,
-                    0
-                );
                 break;
+            case "PDF": {
+                // For PDFs: only count pages. Rendering happens client-side via pdfjs-dist.
+                const pdfResult = await countPdfPages(buffer);
+                pdfPageCount = pdfResult.totalPages;
+                pdfWordEstimate = pdfResult.estimatedWords;
+                break;
+            }
             case "EPUB":
                 pages = [{ pageNumber: 1, content: "[EPUB parsing not yet supported]" }];
-                totalPages = 1;
                 break;
             case "DOCX":
                 pages = [{ pageNumber: 1, content: "[DOCX parsing not yet supported]" }];
-                totalPages = 1;
                 break;
         }
 
-        // Ensure at least one page
-        if (totalPages === 0) totalPages = 1;
+        // For non-PDF: ensure at least one page
+        if (book.fileType !== "PDF" && pages.length === 0) {
+            pages = [{ pageNumber: 1, content: "(Empty document)" }];
+        }
+
+        // Calculate total words
+        const totalWords = book.fileType === "PDF"
+            ? pdfWordEstimate
+            : pages.reduce(
+                (sum, p) => sum + p.content.split(/\s+/).filter(Boolean).length,
+                0
+            );
 
         // Delete any existing pages first (in case of re-processing)
         await prisma.bookPage.deleteMany({ where: { bookId } });
 
-        // Save text pages for non-PDF books
+        // Save pages in batches (only for non-PDF — PDFs render client-side)
         if (pages.length > 0) {
             const BATCH_SIZE = 50;
             for (let i = 0; i < pages.length; i += BATCH_SIZE) {
@@ -71,17 +73,19 @@ export async function processBook(bookId: string, storageKey: string) {
             }
         }
 
+        const finalPageCount = book.fileType === "PDF" ? pdfPageCount : pages.length;
+
         // Update book status to READY
         await prisma.book.update({
             where: { id: bookId },
             data: {
-                totalPages,
+                totalPages: finalPageCount,
                 totalWords,
                 status: "READY",
             },
         });
 
-        console.log(`✅ Book ${bookId} processed: ${totalPages} pages, ${totalWords} words`);
+        console.log(`✅ Book ${bookId} processed: ${finalPageCount} pages, ${totalWords} words`);
     } catch (error) {
         console.error(`❌ Book ${bookId} processing failed:`, error);
 
@@ -94,7 +98,7 @@ export async function processBook(bookId: string, storageKey: string) {
 
 /**
  * Count PDF pages using unpdf (serverless-compatible).
- * Only counts — no text extraction needed.
+ * Only counts — no text extraction stored. Rendering is client-side.
  */
 async function countPdfPages(buffer: Buffer): Promise<{ totalPages: number; estimatedWords: number }> {
     const { getDocumentProxy, extractText } = await import("unpdf");
@@ -102,7 +106,7 @@ async function countPdfPages(buffer: Buffer): Promise<{ totalPages: number; esti
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const totalPages = pdf.numPages;
 
-    // Quick estimation of word count from extracted text
+    // Quick word-count estimate
     let estimatedWords = 0;
     try {
         const result = await extractText(pdf, { mergePages: true });
@@ -110,11 +114,10 @@ async function countPdfPages(buffer: Buffer): Promise<{ totalPages: number; esti
         const text = String((result.text as any) || "");
         estimatedWords = text.split(/\s+/).filter(Boolean).length;
     } catch {
-        // If text extraction fails, estimate ~250 words per page
         estimatedWords = totalPages * 250;
     }
 
-    console.log(`📄 PDF page count: ${totalPages} pages, ~${estimatedWords} words`);
+    console.log(`📄 PDF: ${totalPages} pages, ~${estimatedWords} words`);
     return { totalPages, estimatedWords };
 }
 
