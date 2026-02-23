@@ -8,10 +8,15 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient() {
     const connectionString =
-        process.env.DIRECT_DATABASE_URL ||
+        process.env.DATABASE_URL ||
         "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
 
-    const pool = new pg.Pool({ connectionString });
+    const pool = new pg.Pool({
+        connectionString,
+        ssl: connectionString.includes("supabase.com")
+            ? { rejectUnauthorized: false }
+            : undefined,
+    });
     const adapter = new PrismaPg(pool);
 
     return new PrismaClient({ adapter });
