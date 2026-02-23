@@ -40,7 +40,8 @@ async function renderPdfPage(
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d")!;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
         await page.render({ canvasContext: ctx, viewport }).promise;
         cache.set(pageNum, canvas);
         return canvas;
@@ -279,24 +280,37 @@ function CanvasPage({
         setReady(false);
 
         (async () => {
-            if (!pdfDoc || !divRef.current) return;
-            const srcCanvas = await renderPdfPage(pdfDoc, pageNum, cache, scale);
-            if (cancelled || !divRef.current) return;
+            try {
+                if (!pdfDoc || !divRef.current) return;
+                const srcCanvas = await renderPdfPage(pdfDoc, pageNum, cache, scale);
+                if (cancelled || !divRef.current) return;
 
-            divRef.current.innerHTML = "";
-            if (srcCanvas) {
-                const c = document.createElement("canvas");
-                c.width = srcCanvas.width;
-                c.height = srcCanvas.height;
-                c.style.width = "100%";
-                c.style.height = "100%";
-                c.style.objectFit = "contain";
-                c.style.display = "block";
-                const ctx = c.getContext("2d")!;
-                ctx.drawImage(srcCanvas, 0, 0);
-                divRef.current.appendChild(c);
+                // Clear any existing children
+                while (divRef.current.firstChild) {
+                    divRef.current.removeChild(divRef.current.firstChild);
+                }
+
+                if (srcCanvas) {
+                    const c = document.createElement("canvas");
+                    c.width = srcCanvas.width;
+                    c.height = srcCanvas.height;
+                    c.style.width = "100%";
+                    c.style.height = "100%";
+                    c.style.objectFit = "contain";
+                    c.style.display = "block";
+                    const ctx = c.getContext("2d");
+                    if (ctx) {
+                        ctx.drawImage(srcCanvas, 0, 0);
+                    }
+                    if (!cancelled && divRef.current) {
+                        divRef.current.appendChild(c);
+                    }
+                }
+                setReady(true);
+            } catch (err) {
+                console.error(`CanvasPage error for page ${pageNum}:`, err);
+                setReady(true); // Still mark as ready to avoid infinite spinner
             }
-            setReady(true);
         })();
 
         return () => { cancelled = true; };

@@ -4,10 +4,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import FlipbookReader from "@/components/reader/FlipbookReader";
-import PdfFlipbookReader from "@/components/reader/PdfFlipbookReader";
+import dynamic from "next/dynamic";
 import ControlPanel from "@/components/reader/ControlPanel";
 import { usePageFlipSound } from "@/hooks/useSound";
 import { useAutoSave, fetchProgress } from "@/hooks/useProgress";
+
+// Dynamic import with SSR disabled — pdfjs-dist requires browser APIs
+const PdfFlipbookReader = dynamic(() => import("@/components/reader/PdfFlipbookReader"), { ssr: false });
 
 interface BookPage {
     pageNumber: number;
