@@ -32,14 +32,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Start processing
-        processBook(bookId, storageKey).catch((err) => {
-            console.error(`Failed to process book ${bookId}:`, err);
+        // Process the book synchronously so it's immediately ready
+        await processBook(bookId, storageKey);
+
+        // Fetch the updated book to return its status
+        const updatedBook = await prisma.book.findUnique({
+            where: { id: bookId },
+            select: { status: true, totalPages: true, totalWords: true },
         });
 
         return NextResponse.json({
             success: true,
-            message: "Book processing started",
+            message: "Book processed successfully",
+            book: updatedBook,
         });
     } catch (error) {
         if (error instanceof Error && error.message === "Unauthorized") {
