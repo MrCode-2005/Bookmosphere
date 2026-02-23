@@ -96,7 +96,7 @@ export default function PdfFlipbookReader({
         (async () => {
             try {
                 const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
                 const doc = await pdfjsLib.getDocument(pdfUrl).promise;
                 if (!cancelled) {
                     setPdfDoc(doc);
