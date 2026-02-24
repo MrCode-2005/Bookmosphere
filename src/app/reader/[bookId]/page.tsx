@@ -161,6 +161,7 @@ export default function ReaderPage() {
         return (
             <div ref={containerRef} className="h-screen w-screen relative">
                 <PdfFlipbookReader
+                    bookId={bookId}
                     pdfUrl={book!.signedUrl!}
                     totalPages={book!.totalPages}
                     initialPage={savedPage > 0 ? savedPage : 1}

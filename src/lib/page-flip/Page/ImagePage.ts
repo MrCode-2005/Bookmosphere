@@ -17,6 +17,10 @@ export class ImagePage extends Page {
         super(render, density);
 
         this.image = new Image();
+        // Set onload BEFORE src to avoid race condition
+        this.image.onload = (): void => {
+            this.isLoad = true;
+        };
         this.image.src = href;
     }
 
@@ -107,10 +111,16 @@ export class ImagePage extends Page {
     }
 
     public load(): void {
-        if (!this.isLoad)
-            this.image.onload = (): void => {
+        if (!this.isLoad) {
+            // Image may have loaded already (data URLs, blob URLs, cached)
+            if (this.image.complete && this.image.naturalWidth > 0) {
                 this.isLoad = true;
-            };
+            } else {
+                this.image.onload = (): void => {
+                    this.isLoad = true;
+                };
+            }
+        }
     }
 
     public newTemporaryCopy(): Page {

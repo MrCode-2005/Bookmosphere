@@ -162,6 +162,10 @@ export class CanvasRender extends Render {
     }
 
     private clear(): void {
+        // Reset transform to clear at full physical pixel resolution
+        this.ctx.save();
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
     }
 }

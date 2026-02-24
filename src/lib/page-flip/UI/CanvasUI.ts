@@ -1,7 +1,7 @@
 // @ts-nocheck
-import {UI} from "./UI";
-import {PageFlip} from "../PageFlip";
-import {FlipSetting} from "../Settings";
+import { UI } from "./UI";
+import { PageFlip } from "../PageFlip";
+import { FlipSetting } from "../Settings";
 
 /**
  * UI for canvas mode
@@ -27,8 +27,14 @@ export class CanvasUI extends UI {
         const width = parseInt(cs.getPropertyValue('width'), 10);
         const height = parseInt(cs.getPropertyValue('height'), 10);
 
-        this.canvas.width = width;
-        this.canvas.height = height;
+        // Use devicePixelRatio for crystal-clear Retina rendering
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = width * dpr;
+        this.canvas.height = height * dpr;
+
+        // Scale context so drawing coordinates stay in CSS pixels
+        const ctx = this.canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     /**
