@@ -66,9 +66,9 @@ interface PdfFlipbookReaderProps {
 }
 
 /* How many pages to render simultaneously */
-const RENDER_CONCURRENCY = 8;
-/* Render scale — 4x produces ~2200×2932 per page */
-const RENDER_SCALE = 4;
+const RENDER_CONCURRENCY = 12;
+/* Render scale — 2x base resolution; DPR-aware canvas handles Retina display quality */
+const RENDER_SCALE = 2;
 
 /* ═══════════════════════════════════════════════
  *    PdfFlipbookReader — StPageFlip
@@ -383,8 +383,8 @@ export default function PdfFlipbookReader({
                             key={i}
                             onClick={() => goToPage(i)}
                             className={`group relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${i === currentPage
-                                    ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
-                                    : "border-white/10 hover:border-white/30"
+                                ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
+                                : "border-white/10 hover:border-white/30"
                                 }`}
                         >
                             <img src={src} alt={`Page ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
