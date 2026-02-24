@@ -21,15 +21,35 @@ function emitPageChange(currentPage: number, totalPages: number) {
     }
 }
 
-/* ─── Canvas → Blob helper ─── */
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+/* ─── Render a single PDF page to a JPEG blob using its own canvas ─── */
+async function renderPageToBlob(
+    doc: any,
+    pageNum: number,
+    scale: number
+): Promise<Blob> {
+    const page = await doc.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+
+    // Each concurrent render gets its own canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d")!;
+
+    // White base for pages with transparency
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
     return new Promise((resolve, reject) => {
         canvas.toBlob(
             (blob) => {
                 if (blob) resolve(blob);
-                else reject(new Error("Failed to create blob"));
+                else reject(new Error(`toBlob failed for page ${pageNum}`));
             },
-            "image/png"
+            "image/jpeg",
+            0.97 // Near-lossless — artifacts invisible at 4x resolution
         );
     });
 }
@@ -45,9 +65,14 @@ interface PdfFlipbookReaderProps {
     onToggleSound?: () => void;
 }
 
+/* How many pages to render simultaneously */
+const RENDER_CONCURRENCY = 8;
+/* Render scale — 4x produces ~2200×2932 per page */
+const RENDER_SCALE = 4;
+
 /* ═══════════════════════════════════════════════
- *    PdfFlipbookReader — StPageFlip + IndexedDB Cache
- *    4K rendering, DPR-aware, instant reload
+ *    PdfFlipbookReader — StPageFlip
+ *    Parallel rendering + IndexedDB cache + DPR canvas
  * ═══════════════════════════════════════════════ */
 export default function PdfFlipbookReader({
     bookId,
@@ -73,15 +98,15 @@ export default function PdfFlipbookReader({
     const bookRef = useRef<HTMLDivElement>(null);
     const pageFlipRef = useRef<PageFlip | null>(null);
     const pageImageUrlsRef = useRef<string[]>([]);
-    const objectUrlsRef = useRef<string[]>([]); // track for cleanup
+    const objectUrlsRef = useRef<string[]>([]);
 
     /* ─── PDF Page dimensions ─── */
     const PAGE_WIDTH = 550;
     const PAGE_HEIGHT = 733;
 
-    /* ─── Load pages (from cache or render) ─── */
+    /* ─── Load pages (from cache or parallel render) ─── */
     useEffect(() => {
-        if (pdfReady) return;
+        if (pdfReady || !pdfUrl) return;
         let cancelled = false;
 
         async function loadPages() {
@@ -90,89 +115,94 @@ export default function PdfFlipbookReader({
                 setLoadingMessage("Checking cache…");
                 setLoadingProgress(5);
 
-                const numPages = totalPagesHint || 0;
-                if (numPages > 0) {
-                    const cachedUrls = await getFullCache(bookId, numPages);
+                const hintCount = totalPagesHint || 0;
+                if (hintCount > 0) {
+                    const cachedUrls = await getFullCache(bookId, hintCount);
                     if (cachedUrls && !cancelled) {
                         setLoadingMessage("Loading from cache…");
                         setLoadingProgress(100);
                         pageImageUrlsRef.current = cachedUrls;
-                        objectUrlsRef.current = cachedUrls; // these are object URLs
-                        setTotalPages(numPages);
+                        objectUrlsRef.current = cachedUrls;
+                        setTotalPages(hintCount);
                         setPdfReady(true);
                         return;
                     }
                 }
 
-                // 2. No cache — render from PDF
+                // 2. Load PDF with full font/image codec support
                 setLoadingMessage("Loading PDF…");
-                setLoadingProgress(10);
+                setLoadingProgress(8);
 
-                const loadingTask = pdfjs.getDocument(pdfUrl);
+                const loadingTask = pdfjs.getDocument({
+                    url: pdfUrl,
+                    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+                    cMapPacked: true,
+                    standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+                    isEvalSupported: false,
+                } as any);
+
                 const doc = await loadingTask.promise;
                 if (cancelled) return;
 
                 const pageCount = doc.numPages;
+                if (pageCount === 0) {
+                    setError("PDF has no pages");
+                    return;
+                }
                 setTotalPages(pageCount);
 
-                // Create offscreen canvas
-                const canvas = document.createElement("canvas");
-                const ctx = canvas.getContext("2d")!;
-                const scale = 4; // 4K quality rendering
+                // 3. Render pages in parallel batches
+                setLoadingMessage("Rendering pages…");
+                setLoadingProgress(10);
 
                 const urls: string[] = [];
                 const objUrls: string[] = [];
 
-                setLoadingMessage("Rendering pages…");
-
-                for (let i = 1; i <= pageCount; i++) {
+                for (let batchStart = 0; batchStart < pageCount; batchStart += RENDER_CONCURRENCY) {
                     if (cancelled) return;
 
-                    try {
-                        const page = await doc.getPage(i);
-                        const viewport = page.getViewport({ scale });
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
+                    const batchEnd = Math.min(batchStart + RENDER_CONCURRENCY, pageCount);
+                    const batchPromises: Promise<Blob>[] = [];
 
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    for (let p = batchStart; p < batchEnd; p++) {
+                        batchPromises.push(
+                            renderPageToBlob(doc, p + 1, RENDER_SCALE).catch((err) => {
+                                console.warn(`Page ${p + 1} render failed:`, err);
+                                // Return a white fallback blob
+                                const c = document.createElement("canvas");
+                                c.width = PAGE_WIDTH * RENDER_SCALE;
+                                c.height = PAGE_HEIGHT * RENDER_SCALE;
+                                const ctx = c.getContext("2d")!;
+                                ctx.fillStyle = "#ffffff";
+                                ctx.fillRect(0, 0, c.width, c.height);
+                                ctx.fillStyle = "#999";
+                                ctx.font = `${20 * RENDER_SCALE}px sans-serif`;
+                                ctx.textAlign = "center";
+                                ctx.fillText(`Page ${p + 1}`, c.width / 2, c.height / 2);
+                                return new Promise<Blob>((res) =>
+                                    c.toBlob((b) => res(b!), "image/jpeg", 0.95)
+                                );
+                            })
+                        );
+                    }
 
-                        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+                    const blobs = await Promise.all(batchPromises);
 
-                        // Convert to blob for IndexedDB + object URL
-                        const blob = await canvasToBlob(canvas);
-
-                        // Cache in IndexedDB (non-blocking)
-                        cachePage(bookId, i - 1, blob);
-
-                        // Create object URL for display
-                        const url = URL.createObjectURL(blob);
-                        urls.push(url);
-                        objUrls.push(url);
-                    } catch (err) {
-                        console.error(`Error rendering page ${i}:`, err);
-                        // Blank fallback
-                        canvas.width = PAGE_WIDTH * scale;
-                        canvas.height = PAGE_HEIGHT * scale;
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.fillStyle = "#999999";
-                        ctx.font = `${24 * scale}px sans-serif`;
-                        ctx.textAlign = "center";
-                        ctx.fillText(`Page ${i}`, canvas.width / 2, canvas.height / 2);
-                        const blob = await canvasToBlob(canvas);
-                        cachePage(bookId, i - 1, blob);
-                        const url = URL.createObjectURL(blob);
+                    for (let k = 0; k < blobs.length; k++) {
+                        const pageIdx = batchStart + k;
+                        // Cache in background (fire and forget)
+                        cachePage(bookId, pageIdx, blobs[k]);
+                        const url = URL.createObjectURL(blobs[k]);
                         urls.push(url);
                         objUrls.push(url);
                     }
 
-                    setLoadingProgress(Math.round(10 + (i / pageCount) * 88));
+                    setLoadingProgress(Math.round(10 + ((batchStart + blobs.length) / pageCount) * 88));
                 }
 
                 if (cancelled) return;
 
-                // Finalize cache
+                // 4. Finalize cache
                 await finalizeCacheMeta(bookId, pageCount);
 
                 pageImageUrlsRef.current = urls;
@@ -180,15 +210,15 @@ export default function PdfFlipbookReader({
                 setLoadingProgress(100);
                 setPdfReady(true);
             } catch (err: any) {
-                if (!cancelled) setError(`Failed to load PDF: ${err.message}`);
+                if (!cancelled) {
+                    console.error("PDF loading error:", err);
+                    setError(`Failed to load PDF: ${err.message}`);
+                }
             }
         }
 
         loadPages();
-
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [bookId, pdfUrl, pdfReady, totalPagesHint]);
 
     /* ─── Cleanup object URLs on unmount ─── */
@@ -202,12 +232,11 @@ export default function PdfFlipbookReader({
 
     /* ─── Initialize PageFlip once images are ready ─── */
     useEffect(() => {
-        if (!pdfReady || !bookRef.current || pageImageUrlsRef.current.length === 0) return;
+        if (!pdfReady || !bookRef.current) return;
+        if (pageImageUrlsRef.current.length === 0) return;
         if (pageFlipRef.current) return;
 
-        const bookEl = bookRef.current;
-
-        const pf = new PageFlip(bookEl, {
+        const pf = new PageFlip(bookRef.current, {
             width: PAGE_WIDTH,
             height: PAGE_HEIGHT,
             size: "stretch" as any,
@@ -310,7 +339,7 @@ export default function PdfFlipbookReader({
         return (
             <div className="h-full w-full flex flex-col items-center justify-center gap-4" style={{ background: "#0b1120" }}>
                 <p className="text-red-400 text-sm">{error}</p>
-                <button onClick={() => window.location.reload()} className="text-white/50 hover:text-white text-xs underline">
+                <button onClick={() => { setError(null); setPdfReady(false); }} className="text-white/50 hover:text-white text-xs underline">
                     Try again
                 </button>
             </div>
@@ -354,11 +383,11 @@ export default function PdfFlipbookReader({
                             key={i}
                             onClick={() => goToPage(i)}
                             className={`group relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${i === currentPage
-                                ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
-                                : "border-white/10 hover:border-white/30"
+                                    ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
+                                    : "border-white/10 hover:border-white/30"
                                 }`}
                         >
-                            <img src={src} alt={`Page ${i + 1}`} className="w-full h-full object-cover" />
+                            <img src={src} alt={`Page ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
                             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent py-1">
                                 <span className="text-white/80 text-xs">{i + 1}</span>
                             </div>
