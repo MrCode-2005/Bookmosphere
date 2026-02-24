@@ -156,28 +156,36 @@ export default function ReaderPage() {
         );
     }
 
+    // ─── PDF MODE: full-viewport Heyzine-style (no header/footer) ───
+    if (isPdf) {
+        return (
+            <div ref={containerRef} className="h-screen w-screen relative">
+                <PdfFlipbookReader
+                    pdfUrl={book!.signedUrl!}
+                    totalPages={book!.totalPages}
+                    initialPage={savedPage > 0 ? savedPage : 1}
+                    onFlip={playFlipSound}
+                    soundEnabled={soundEnabled}
+                    onToggleSound={toggleSound}
+                />
+                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
+            </div>
+        );
+    }
+
+    // ─── TEXT MODE: existing dark layout with header/footer ───
     return (
         <div ref={containerRef} className="min-h-screen flex flex-col bg-[#1a1510]">
             <ReaderHeader title={book!.title} author={book!.author} />
 
             <main className="flex-1 relative">
-                {isPdf ? (
-                    <PdfFlipbookReader
-                        pdfUrl={book!.signedUrl!}
-                        totalPages={book!.totalPages}
-                        initialPage={savedPage > 0 ? savedPage : 1}
-                        onFlip={playFlipSound}
-                    />
-                ) : (
-                    <FlipbookReader
-                        pages={book!.pages}
-                        initialPage={savedPage}
-                        fontSize={fontSize}
-                        onFlip={playFlipSound}
-                    />
-                )}
+                <FlipbookReader
+                    pages={book!.pages}
+                    initialPage={savedPage}
+                    fontSize={fontSize}
+                    onFlip={playFlipSound}
+                />
 
-                {/* Auto-save progress */}
                 <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
 
                 <ControlPanel
