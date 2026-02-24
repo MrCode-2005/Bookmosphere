@@ -326,13 +326,10 @@ export default function PdfFlipbookReader({
     }, []);
 
     /* ─── Scrollbar ─── */
-    const scrollbarProgress = totalPages > 0 ? currentPage / Math.max(1, totalPages - 1) : 0;
-    const onScrollbarClick = useCallback(
-        (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleSliderChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
             if (!pageFlipRef.current) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
-            const targetPage = Math.round(x * (totalPages - 1));
+            const targetPage = parseInt(e.target.value, 10);
             pageFlipRef.current.turnToPage(targetPage);
             setCurrentPage(targetPage);
             emitPageChange(targetPage, totalPages);
@@ -443,9 +440,14 @@ export default function PdfFlipbookReader({
                 <button onClick={flipPrev} disabled={currentPage <= 0} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" /></svg>
                 </button>
-                <div className="flex-1 h-2 bg-white/10 rounded-full cursor-pointer relative group" onClick={onScrollbarClick}>
-                    <div className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white/60 rounded-full border-2 border-white/30 shadow-lg transition-all group-hover:scale-110" style={{ left: `calc(${scrollbarProgress * 100}% - 10px)` }} />
-                </div>
+                <input
+                    type="range"
+                    min={0}
+                    max={totalPages > 0 ? totalPages - 1 : 0}
+                    value={currentPage}
+                    onChange={handleSliderChange}
+                    className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-white/80 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white/30 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-transform hover:[&::-webkit-slider-thumb]:scale-110"
+                />
                 <button onClick={flipNext} disabled={currentPage >= totalPages - 1} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></svg>
                 </button>
