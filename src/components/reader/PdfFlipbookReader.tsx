@@ -205,10 +205,10 @@ export default function PdfFlipbookReader({
     const toggleFullscreen = useCallback(() => {
         if (!containerRef.current) return;
         if (!document.fullscreenElement) {
-            containerRef.current.requestFullscreen().catch(() => {});
+            containerRef.current.requestFullscreen().catch(() => { });
             setIsFullscreen(true);
         } else {
-            document.exitFullscreen().catch(() => {});
+            document.exitFullscreen().catch(() => { });
             setIsFullscreen(false);
         }
     }, []);
@@ -282,156 +282,148 @@ export default function PdfFlipbookReader({
             ref={containerRef}
             className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden select-none"
             style={{
-                background: `linear-gradient(135deg, #eae7e2 25%, transparent 25%, transparent 50%, #eae7e2 50%, #eae7e2 75%, transparent 75%), linear-gradient(135deg, #eae7e2 25%, transparent 25%, transparent 50%, #eae7e2 50%, #eae7e2 75%, transparent 75%)`,
-                backgroundSize: "40px 40px",
-                backgroundPosition: "0 0, 20px 20px",
-                backgroundColor: "#e4e1dc",
+                background: `linear-gradient(135deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.03) 75%, transparent 75%), linear-gradient(135deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.03) 75%, transparent 75%)`,
+                backgroundSize: "60px 60px",
+                backgroundPosition: "0 0, 30px 30px",
+                backgroundColor: "#e8e5e0",
             }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
         >
-            {/* Hidden Document for loading */}
+            {/* Single Document wrapper — all Pages must be inside this */}
             <Document
                 file={pdfUrl}
                 onLoadSuccess={(pdf) => { onDocumentLoadSuccess(pdf); onDocLoadForOutline(pdf); }}
                 onLoadError={onDocumentLoadError}
                 loading={null}
-                className="hidden"
-            />
+            >
 
-            {/* Loading spinner */}
-            {!pdfLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: "#e4e1dc" }}>
-                    <div className="text-center space-y-3">
-                        <div className="animate-spin w-10 h-10 border-3 border-gray-300 border-t-gray-600 rounded-full mx-auto" />
-                        <p className="text-gray-500 text-sm">Loading PDF…</p>
+                {/* Loading spinner */}
+                {!pdfLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: "#e8e5e0" }}>
+                        <div className="text-center space-y-3">
+                            <div className="animate-spin w-10 h-10 border-3 border-gray-300 border-t-gray-600 rounded-full mx-auto" />
+                            <p className="text-gray-500 text-sm">Loading PDF…</p>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* ─── BOOK AREA ─── */}
-            {pdfLoaded && (
-                <div
-                    className="relative flex items-center justify-center flex-1 w-full"
-                    style={{
-                        cursor: zoomMode && zoomLevel > 1 ? (isPanning ? "grabbing" : "grab") : "default",
-                    }}
-                    onClick={!zoomMode ? onBookClick : undefined}
-                    onMouseDown={zoomMode ? onPanMouseDown : undefined}
-                    onMouseMove={zoomMode ? onPanMouseMove : undefined}
-                    onMouseUp={zoomMode ? onPanMouseUp : undefined}
-                    onMouseLeave={zoomMode ? onPanMouseUp : undefined}
-                >
+                {/* ─── BOOK AREA ─── */}
+                {pdfLoaded && (
                     <div
-                        className="relative flex items-stretch"
+                        className="relative flex items-center justify-center flex-1 w-full"
                         style={{
-                            perspective: "2500px",
-                            transform: zoomMode ? `scale(${zoomLevel}) translate(${panOffset.x / zoomLevel}px, ${panOffset.y / zoomLevel}px)` : undefined,
-                            transition: isPanning ? "none" : "transform 0.3s ease",
+                            cursor: zoomMode && zoomLevel > 1 ? (isPanning ? "grabbing" : "grab") : "default",
                         }}
+                        onClick={!zoomMode ? onBookClick : undefined}
+                        onMouseDown={zoomMode ? onPanMouseDown : undefined}
+                        onMouseMove={zoomMode ? onPanMouseMove : undefined}
+                        onMouseUp={zoomMode ? onPanMouseUp : undefined}
+                        onMouseLeave={zoomMode ? onPanMouseUp : undefined}
                     >
-                        {/* Stacked-page edge LEFT */}
-                        {showSpread && (
+                        <div
+                            className="relative flex items-stretch"
+                            style={{
+                                perspective: "2500px",
+                                transform: zoomMode ? `scale(${zoomLevel}) translate(${panOffset.x / zoomLevel}px, ${panOffset.y / zoomLevel}px)` : undefined,
+                                transition: isPanning ? "none" : "transform 0.3s ease",
+                            }}
+                        >
+                            {/* Stacked-page edge LEFT */}
+                            {showSpread && (
+                                <div className="absolute pointer-events-none" style={{
+                                    left: "-6px", top: "6px", bottom: "6px", width: "7px",
+                                    background: "linear-gradient(to left, #ccc 0px, #bbb 1px, #aaa 2px, #999 3px, transparent 7px)",
+                                    borderRadius: "2px 0 0 2px",
+                                }} />
+                            )}
+
+                            {/* Stacked-page edge RIGHT */}
                             <div className="absolute pointer-events-none" style={{
-                                left: "-6px", top: "6px", bottom: "6px", width: "7px",
-                                background: "linear-gradient(to left, #ccc 0px, #bbb 1px, #aaa 2px, #999 3px, transparent 7px)",
-                                borderRadius: "2px 0 0 2px",
+                                right: "-6px", top: "6px", bottom: "6px", width: "7px",
+                                background: "linear-gradient(to right, #ccc 0px, #bbb 1px, #aaa 2px, #999 3px, transparent 7px)",
+                                borderRadius: "0 2px 2px 0",
                             }} />
-                        )}
 
-                        {/* Stacked-page edge RIGHT */}
-                        <div className="absolute pointer-events-none" style={{
-                            right: "-6px", top: "6px", bottom: "6px", width: "7px",
-                            background: "linear-gradient(to right, #ccc 0px, #bbb 1px, #aaa 2px, #999 3px, transparent 7px)",
-                            borderRadius: "0 2px 2px 0",
-                        }} />
-
-                        {/* COVER MODE: single page with white border */}
-                        {isCover && (
-                            <div style={{
-                                padding: "8px",
-                                background: "#fff",
-                                boxShadow: "2px 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.08)",
-                            }}>
-                                <div className="relative overflow-hidden" style={{ width: pageDims.w, height: pageDims.h }}>
-                                    <Document file={pdfUrl} loading={null}>
+                            {/* COVER MODE: single page with white border */}
+                            {isCover && (
+                                <div style={{
+                                    padding: "8px",
+                                    background: "#fff",
+                                    boxShadow: "2px 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.08)",
+                                }}>
+                                    <div className="relative overflow-hidden bg-white" style={{ width: pageDims.w, height: pageDims.h }}>
                                         <Page
                                             pageNumber={1}
                                             width={pageDims.w}
-                                            height={pageDims.h}
                                             renderTextLayer={false}
                                             renderAnnotationLayer={false}
                                             loading={<PageLoader />}
                                         />
-                                    </Document>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* SPREAD MODE */}
-                        {showSpread && (
-                            <>
-                                {/* LEFT PAGE */}
-                                <div className="relative overflow-hidden bg-white" style={{
-                                    width: pageDims.w, height: pageDims.h,
-                                    boxShadow: "inset -4px 0 12px rgba(0,0,0,0.04)",
-                                }}>
-                                    {leftPageNum && (
-                                        <Document file={pdfUrl} loading={null}>
+                            {/* SPREAD MODE */}
+                            {showSpread && (
+                                <>
+                                    {/* LEFT PAGE */}
+                                    <div className="relative overflow-hidden bg-white" style={{
+                                        width: pageDims.w, height: pageDims.h,
+                                        boxShadow: "inset -4px 0 12px rgba(0,0,0,0.04)",
+                                    }}>
+                                        {leftPageNum && (
                                             <Page
                                                 pageNumber={leftPageNum}
                                                 width={pageDims.w}
-                                                height={pageDims.h}
                                                 renderTextLayer={false}
                                                 renderAnnotationLayer={false}
                                                 loading={<PageLoader />}
                                             />
-                                        </Document>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
 
-                                {/* CENTER SPINE */}
-                                <div className="relative z-10" style={{
-                                    width: "3px",
-                                    background: "linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.08) 100%)",
-                                }} />
+                                    {/* CENTER SPINE */}
+                                    <div className="relative z-10" style={{
+                                        width: "3px",
+                                        background: "linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.08) 100%)",
+                                    }} />
 
-                                {/* RIGHT PAGE */}
-                                <div className="relative overflow-hidden bg-white" style={{
-                                    width: pageDims.w, height: pageDims.h,
-                                    boxShadow: "inset 4px 0 12px rgba(0,0,0,0.04)",
-                                }}>
-                                    {rightPageNum ? (
-                                        <Document file={pdfUrl} loading={null}>
+                                    {/* RIGHT PAGE */}
+                                    <div className="relative overflow-hidden bg-white" style={{
+                                        width: pageDims.w, height: pageDims.h,
+                                        boxShadow: "inset 4px 0 12px rgba(0,0,0,0.04)",
+                                    }}>
+                                        {rightPageNum ? (
                                             <Page
                                                 pageNumber={rightPageNum}
                                                 width={pageDims.w}
-                                                height={pageDims.h}
                                                 renderTextLayer={false}
                                                 renderAnnotationLayer={false}
                                                 loading={<PageLoader />}
                                             />
-                                        </Document>
-                                    ) : (
-                                        <div className="w-full h-full bg-white" />
-                                    )}
-                                </div>
-                            </>
-                        )}
+                                        ) : (
+                                            <div className="w-full h-full bg-white" />
+                                        )}
+                                    </div>
+                                </>
+                            )}
 
-                        {/* Page flip animation overlay */}
-                        {isFlipping && (
-                            <FlipOverlay
-                                direction={flipDir}
-                                isCover={isCover}
-                                width={pageDims.w}
-                                height={pageDims.h}
-                                duration={FLIP_DURATION}
-                            />
-                        )}
+                            {/* Page flip animation overlay */}
+                            {isFlipping && (
+                                <FlipOverlay
+                                    direction={flipDir}
+                                    isCover={isCover}
+                                    width={pageDims.w}
+                                    height={pageDims.h}
+                                    duration={FLIP_DURATION}
+                                />
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+
+            </Document>
 
             {/* ═══ TOOLBAR (top-right) ═══ */}
             <div className="absolute top-4 right-4 z-30 flex items-center gap-1 bg-white rounded-lg shadow-md px-1 py-1" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
@@ -659,9 +651,8 @@ function ToolbarBtn({
         <button
             onClick={onClick}
             title={title}
-            className={`w-9 h-9 flex items-center justify-center rounded-md transition-all ${
-                active ? "text-gray-900 bg-gray-100" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-            }`}
+            className={`w-9 h-9 flex items-center justify-center rounded-md transition-all ${active ? "text-gray-900 bg-gray-100" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                }`}
         >
             {children}
         </button>
