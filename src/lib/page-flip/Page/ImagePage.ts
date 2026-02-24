@@ -8,7 +8,7 @@ import { Point } from '../BasicTypes';
  * Class representing a book page as an image on Canvas
  */
 export class ImagePage extends Page {
-    private readonly image: HTMLImageElement = null;
+    private image: HTMLImageElement = null;
     private isLoad = false;
 
     private loadingAngle = 0;
@@ -22,6 +22,15 @@ export class ImagePage extends Page {
             this.isLoad = true;
         };
         this.image.src = href;
+    }
+
+    /** Hot-swap image source (for progressive loading) */
+    public updateSrc(newSrc: string): void {
+        this.isLoad = false;
+        this.image.onload = (): void => {
+            this.isLoad = true;
+        };
+        this.image.src = newSrc;
     }
 
     public draw(tempDensity?: PageDensity): void {
