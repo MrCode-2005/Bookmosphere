@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { PageFlip, FlipCorner } from "@/lib/page-flip";
@@ -44,7 +44,7 @@ export default function PdfFlipbookReader({
 }: PdfFlipbookReaderProps) {
     /* ─── State ─── */
     const [totalPages, setTotalPages] = useState(totalPagesHint || 0);
-    const [currentPage, setCurrentPage] = useState(initialPage - 1); // 0-indexed
+    const [currentPage, setCurrentPage] = useState(0); // Always start from page 0 (cover)
     const [pdfReady, setPdfReady] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -78,7 +78,7 @@ export default function PdfFlipbookReader({
         const ctx = canvas.getContext("2d")!;
 
         const images: string[] = [];
-        const scale = 2; // Higher resolution rendering
+        const scale = 3; // High resolution rendering for crystal clear text
 
         for (let i = 1; i <= numPages; i++) {
             try {
@@ -93,8 +93,8 @@ export default function PdfFlipbookReader({
 
                 await page.render({ canvasContext: ctx, viewport }).promise;
 
-                // Convert to data URL
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+                // Convert to lossless PNG for crystal clear text
+                const dataUrl = canvas.toDataURL("image/png");
                 images.push(dataUrl);
 
                 // Update progress
@@ -110,7 +110,7 @@ export default function PdfFlipbookReader({
                 ctx.font = "24px sans-serif";
                 ctx.textAlign = "center";
                 ctx.fillText(`Page ${i}`, canvas.width / 2, canvas.height / 2);
-                images.push(canvas.toDataURL("image/jpeg", 0.92));
+                images.push(canvas.toDataURL("image/png"));
             }
         }
 
@@ -118,18 +118,26 @@ export default function PdfFlipbookReader({
         setPdfReady(true);
     }, []);
 
-    /* ─── Load PDF document ─── */
-    const onDocumentLoadSuccess = useCallback(
-        async (pdf: any) => {
-            pdfDocRef.current = pdf._pdfInfo ? pdf : pdf;
-            // Get the underlying pdf.js document
-            const loadingTask = pdfjs.getDocument(pdfUrl);
-            const doc = await loadingTask.promise;
-            pdfDocRef.current = doc;
-            await renderAllPages();
-        },
-        [pdfUrl, renderAllPages]
-    );
+    /* ─── Load PDF document directly ─── */
+    useEffect(() => {
+        if (pdfReady) return;
+        let cancelled = false;
+
+        async function loadPdf() {
+            try {
+                const loadingTask = pdfjs.getDocument(pdfUrl);
+                const doc = await loadingTask.promise;
+                if (cancelled) return;
+                pdfDocRef.current = doc;
+                await renderAllPages();
+            } catch (err: any) {
+                if (!cancelled) setError(`Failed to load PDF: ${err.message}`);
+            }
+        }
+
+        loadPdf();
+        return () => { cancelled = true; };
+    }, [pdfUrl, pdfReady, renderAllPages]);
 
     /* ─── Initialize PageFlip once images are ready ─── */
     useEffect(() => {
@@ -152,7 +160,7 @@ export default function PdfFlipbookReader({
             usePortrait: true,
             drawShadow: true,
             mobileScrollSupport: true,
-            startPage: Math.max(0, initialPage - 1),
+            startPage: 0, // Always start from the cover page
             autoSize: true,
             showPageCorners: true,
             disableFlipByClick: false,
@@ -174,8 +182,8 @@ export default function PdfFlipbookReader({
 
         pageFlipRef.current = pf;
 
-        // Initial page event
-        emitPageChange(Math.max(0, initialPage - 1), totalPages);
+        // Initial page event — always start from cover
+        emitPageChange(0, totalPages);
 
         return () => {
             if (pageFlipRef.current) {
@@ -276,15 +284,7 @@ export default function PdfFlipbookReader({
                 className="h-full w-full flex flex-col items-center justify-center gap-6"
                 style={{ background: "#0b1120" }}
             >
-                {/* Hidden Document for loading the PDF */}
-                <Document
-                    file={pdfUrl}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={(err) => setError(`Failed to load PDF: ${err.message}`)}
-                    loading={null}
-                >
-                    {/* We don't render any Page here, just load the document */}
-                </Document>
+                {/* PDF is loaded directly via pdfjs in useEffect */}
 
                 <div className="flex flex-col items-center gap-3">
                     <div className="w-12 h-12 relative">
@@ -325,8 +325,8 @@ export default function PdfFlipbookReader({
                             key={i}
                             onClick={() => goToPage(i)}
                             className={`group relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${i === currentPage
-                                    ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
-                                    : "border-white/10 hover:border-white/30"
+                                ? "border-indigo-500 shadow-lg shadow-indigo-500/20"
+                                : "border-white/10 hover:border-white/30"
                                 }`}
                         >
                             <img
