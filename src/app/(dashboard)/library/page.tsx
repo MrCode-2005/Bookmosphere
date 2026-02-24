@@ -3,6 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface BookItem {
     id: string;
@@ -13,6 +18,27 @@ interface BookItem {
     fileType: string;
     status: string;
     createdAt: string;
+    signedUrl?: string;
+    coverUrl?: string;
+}
+
+/* ─── Tiny component: renders page 1 of a PDF as a thumbnail ─── */
+function PdfCover({ url }: { url: string }) {
+    return (
+        <Document file={url} loading={null} error={<span className="text-4xl opacity-60">📖</span>}>
+            <Page
+                pageNumber={1}
+                width={240}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                loading={
+                    <div className="flex items-center justify-center w-full h-full">
+                        <div className="animate-spin w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full" />
+                    </div>
+                }
+            />
+        </Document>
+    );
 }
 
 export default function LibraryPage() {
@@ -257,8 +283,14 @@ export default function LibraryPage() {
                                     disabled={book.status !== "READY"}
                                     className="w-full bg-card border border-border rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative">
-                                        <span className="text-4xl opacity-60">📖</span>
+                                    <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative overflow-hidden">
+                                        {book.fileType === "PDF" && book.signedUrl ? (
+                                            <PdfCover url={book.signedUrl} />
+                                        ) : book.coverUrl ? (
+                                            <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-4xl opacity-60">📖</span>
+                                        )}
                                         {book.status === "PROCESSING" && (
                                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                                                 <div className="animate-spin w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />

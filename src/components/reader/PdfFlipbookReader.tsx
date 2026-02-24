@@ -268,8 +268,8 @@ export default function PdfFlipbookReader({
     /* ─── Error state ─── */
     if (loadError) {
         return (
-            <div className="w-full h-full flex items-center justify-center" style={{ background: "#e8e5e0" }}>
-                <p className="text-red-500 text-sm">{loadError}</p>
+            <div className="w-full h-full flex items-center justify-center" style={{ background: "#0b1120" }}>
+                <p className="text-red-400 text-sm">{loadError}</p>
             </div>
         );
     }
@@ -282,10 +282,12 @@ export default function PdfFlipbookReader({
             ref={containerRef}
             className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden select-none"
             style={{
-                background: `linear-gradient(135deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.03) 75%, transparent 75%), linear-gradient(135deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.03) 75%, transparent 75%)`,
-                backgroundSize: "60px 60px",
-                backgroundPosition: "0 0, 30px 30px",
-                backgroundColor: "#e8e5e0",
+                background: `
+                    linear-gradient(rgba(30,42,71,0.45) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(30,42,71,0.45) 1px, transparent 1px)
+                `,
+                backgroundSize: "120px 90px",
+                backgroundColor: "#0b1120",
             }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
@@ -300,7 +302,7 @@ export default function PdfFlipbookReader({
 
                 {/* Loading spinner */}
                 {!pdfLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: "#e8e5e0" }}>
+                    <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: "#0b1120" }}>
                         <div className="text-center space-y-3">
                             <div className="animate-spin w-10 h-10 border-3 border-gray-300 border-t-gray-600 rounded-full mx-auto" />
                             <p className="text-gray-500 text-sm">Loading PDF…</p>
@@ -567,7 +569,7 @@ export default function PdfFlipbookReader({
                 <button
                     onClick={goPrev}
                     disabled={currentPage <= 1}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-0 transition-all"
+                    className="text-gray-400 hover:text-white disabled:opacity-0 transition-all"
                     aria-label="Previous page"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -581,18 +583,18 @@ export default function PdfFlipbookReader({
                     ref={scrollbarRef}
                     onClick={onScrollbarClick}
                     className="flex-1 mx-6 h-2 rounded-full cursor-pointer relative"
-                    style={{ background: "rgba(0,0,0,0.12)", maxWidth: "600px", margin: "0 auto" }}
+                    style={{ background: "rgba(255,255,255,0.12)", maxWidth: "600px", margin: "0 auto" }}
                 >
                     <div
                         className="absolute left-0 top-0 bottom-0 rounded-full transition-all duration-300"
                         style={{
                             width: `${Math.max(8, progress * 100)}%`,
-                            background: "rgba(0,0,0,0.35)",
+                            background: "rgba(255,255,255,0.3)",
                         }}
                     />
                     {/* Thumb */}
                     <div
-                        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-gray-500 shadow-sm transition-all duration-300"
+                        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white/60 shadow-sm transition-all duration-300"
                         style={{ left: `calc(${progress * 100}% - 8px)` }}
                     />
                 </div>
@@ -601,7 +603,7 @@ export default function PdfFlipbookReader({
                 <button
                     onClick={goNext}
                     disabled={currentPage >= numPages}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-0 transition-all"
+                    className="text-gray-400 hover:text-white disabled:opacity-0 transition-all"
                     aria-label="Next page"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -612,25 +614,11 @@ export default function PdfFlipbookReader({
             </div>
 
             {/* ═══ BRANDING (bottom-left) ═══ */}
-            <div className="absolute bottom-12 left-4 z-20 flex items-center gap-2 opacity-50">
-                <span className="text-[11px] text-gray-500 font-medium tracking-wide">Bookmosphere</span>
+            <div className="absolute bottom-12 left-4 z-20 flex items-center gap-2 opacity-40">
+                <span className="text-[11px] text-gray-300 font-medium tracking-wide">Bookmosphere</span>
             </div>
 
-            {/* Global styles for flip animation */}
-            <style>{`
-                @keyframes flipNext {
-                    0% { transform: rotateY(0deg); }
-                    40% { transform: rotateY(-80deg); }
-                    70% { transform: rotateY(-140deg); }
-                    100% { transform: rotateY(-180deg); }
-                }
-                @keyframes flipPrev {
-                    0% { transform: rotateY(-180deg); }
-                    40% { transform: rotateY(-100deg); }
-                    70% { transform: rotateY(-40deg); }
-                    100% { transform: rotateY(0deg); }
-                }
-            `}</style>
+
         </div>
     );
 }
@@ -668,7 +656,7 @@ function PageLoader() {
     );
 }
 
-/* ─── Flip Animation Overlay ─── */
+/* ─── Realistic Page Curl Overlay ─── */
 function FlipOverlay({
     direction,
     isCover,
@@ -683,63 +671,131 @@ function FlipOverlay({
     duration: number;
 }) {
     const isNext = direction === "next";
+    const id = `curl_${Date.now()}`;
 
+    /*
+     * The realistic curl works by:
+     * 1. A main page that rotates around its left edge (like a book hinge)
+     * 2. A "curl" strip on the leading edge that creates the bend illusion
+     * 3. A shadow that sweeps across the page underneath
+     * 4. A highlight gradient on the curling page for the paper sheen
+     */
     return (
-        <div className="absolute inset-0 pointer-events-none z-30" style={{ perspective: "2500px" }}>
-            {/* The flipping page */}
+        <div className="absolute inset-0 pointer-events-none z-30" style={{ perspective: "1800px" }}>
+            {/* Main flipping page body */}
             <div
+                className={`${id}_page`}
                 style={{
                     position: "absolute",
                     width,
                     height,
                     top: 0,
                     ...(isNext
-                        ? {
-                            right: isCover ? 0 : "50%",
-                            transformOrigin: isCover ? "left center" : "left center",
-                        }
-                        : {
-                            left: showSpreadOrigin(isCover) ? "0" : "50%",
-                            transformOrigin: "right center",
-                        }),
-                    background: "linear-gradient(90deg, #f8f6f3 0%, #fff 30%, #faf9f7 100%)",
-                    boxShadow: isNext
-                        ? "-8px 0 30px rgba(0,0,0,0.15), -2px 0 8px rgba(0,0,0,0.05)"
-                        : "8px 0 30px rgba(0,0,0,0.15), 2px 0 8px rgba(0,0,0,0.05)",
-                    animation: `${isNext ? "flipNext" : "flipPrev"} ${duration}ms ease-in-out forwards`,
+                        ? { right: isCover ? 0 : "50%", transformOrigin: "left center" }
+                        : { left: "50%", transformOrigin: "right center" }),
+                    background: "linear-gradient(90deg, #f5f3ef 0%, #fff 20%, #fdfcfb 80%, #f0ede8 100%)",
+                    borderRadius: "0 2px 2px 0",
+                    animation: `${id}_flip ${duration}ms cubic-bezier(0.645, 0.045, 0.355, 1.0) forwards`,
                     backfaceVisibility: "hidden",
+                    zIndex: 5,
                 }}
-            />
-            {/* Shadow gradient on the page underneath */}
+            >
+                {/* Paper texture gradient on the flipping page */}
+                <div style={{
+                    position: "absolute", inset: 0,
+                    background: isNext
+                        ? "linear-gradient(to left, rgba(0,0,0,0.06) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.02) 100%)"
+                        : "linear-gradient(to right, rgba(0,0,0,0.06) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.02) 100%)",
+                }} />
+            </div>
+
+            {/* Curl edge — the curved strip that creates the bend illusion */}
             <div
+                className={`${id}_curl`}
                 style={{
                     position: "absolute",
-                    width: width * 0.3,
+                    width: width * 0.12,
                     height,
                     top: 0,
                     ...(isNext
-                        ? { left: isCover ? 0 : "50%", marginLeft: isCover ? 0 : -width * 0.15 }
-                        : { right: "50%", marginRight: -width * 0.15 }),
+                        ? { right: isCover ? 0 : "50%", transformOrigin: "left center" }
+                        : { left: "50%", transformOrigin: "right center" }),
                     background: isNext
-                        ? "linear-gradient(to right, rgba(0,0,0,0.08), transparent)"
-                        : "linear-gradient(to left, rgba(0,0,0,0.08), transparent)",
-                    opacity: 0,
-                    animation: `fadeInOut ${duration}ms ease-in-out`,
-                    pointerEvents: "none",
+                        ? "linear-gradient(to left, rgba(255,255,255,0.9) 0%, rgba(245,243,239,0.7) 40%, rgba(0,0,0,0.08) 100%)"
+                        : "linear-gradient(to right, rgba(255,255,255,0.9) 0%, rgba(245,243,239,0.7) 40%, rgba(0,0,0,0.08) 100%)",
+                    animation: `${id}_curlEdge ${duration}ms cubic-bezier(0.645, 0.045, 0.355, 1.0) forwards`,
+                    zIndex: 6,
                 }}
             />
+
+            {/* Shadow cast on the page underneath (sweeps across) */}
+            <div
+                className={`${id}_shadow`}
+                style={{
+                    position: "absolute",
+                    width: width * 0.5,
+                    height,
+                    top: 0,
+                    ...(isNext
+                        ? { right: isCover ? 0 : "50%" }
+                        : { left: "50%" }),
+                    background: isNext
+                        ? "linear-gradient(to right, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.08) 30%, transparent 100%)"
+                        : "linear-gradient(to left, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.08) 30%, transparent 100%)",
+                    animation: `${id}_shadowSweep ${duration}ms cubic-bezier(0.645, 0.045, 0.355, 1.0) forwards`,
+                    zIndex: 4,
+                }}
+            />
+
+            {/* Spine shadow intensification during flip */}
+            <div style={{
+                position: "absolute",
+                width: 6,
+                height,
+                top: 0,
+                left: "50%",
+                marginLeft: -3,
+                background: "rgba(0,0,0,0.12)",
+                opacity: 0,
+                animation: `${id}_spineGlow ${duration}ms ease-in-out`,
+                zIndex: 7,
+            }} />
+
             <style>{`
-                @keyframes fadeInOut {
-                    0% { opacity: 0; }
-                    30% { opacity: 1; }
-                    70% { opacity: 1; }
+                @keyframes ${id}_flip {
+                    0%   { transform: rotateY(0deg);     box-shadow: -2px 0 5px rgba(0,0,0,0.05); }
+                    15%  { transform: rotateY(${isNext ? "-15" : "15"}deg);  box-shadow: ${isNext ? "-" : ""}5px 0 15px rgba(0,0,0,0.12); }
+                    35%  { transform: rotateY(${isNext ? "-55" : "55"}deg);  box-shadow: ${isNext ? "-" : ""}10px 0 25px rgba(0,0,0,0.2); }
+                    55%  { transform: rotateY(${isNext ? "-100" : "100"}deg); box-shadow: ${isNext ? "-" : ""}12px 0 35px rgba(0,0,0,0.22); }
+                    75%  { transform: rotateY(${isNext ? "-145" : "145"}deg); box-shadow: ${isNext ? "-" : ""}8px 0 20px rgba(0,0,0,0.15); }
+                    90%  { transform: rotateY(${isNext ? "-170" : "170"}deg); box-shadow: ${isNext ? "-" : ""}3px 0 8px rgba(0,0,0,0.06); }
+                    100% { transform: rotateY(${isNext ? "-180" : "180"}deg); box-shadow: 0 0 0 rgba(0,0,0,0); }
+                }
+                @keyframes ${id}_curlEdge {
+                    0%   { transform: rotateY(0deg) scaleX(1);    opacity: 0; }
+                    10%  { opacity: 1; }
+                    15%  { transform: rotateY(${isNext ? "-15" : "15"}deg) scaleX(1.8);  }
+                    35%  { transform: rotateY(${isNext ? "-55" : "55"}deg) scaleX(2.2);  }
+                    55%  { transform: rotateY(${isNext ? "-100" : "100"}deg) scaleX(1.5); }
+                    75%  { transform: rotateY(${isNext ? "-145" : "145"}deg) scaleX(0.8); }
+                    90%  { transform: rotateY(${isNext ? "-170" : "170"}deg) scaleX(0.3); opacity: 0.5; }
+                    100% { transform: rotateY(${isNext ? "-180" : "180"}deg) scaleX(0);   opacity: 0; }
+                }
+                @keyframes ${id}_shadowSweep {
+                    0%   { opacity: 0; transform: translateX(0); }
+                    15%  { opacity: 0.4; }
+                    35%  { opacity: 0.8; transform: translateX(${isNext ? "-" : ""}${width * 0.15}px); }
+                    55%  { opacity: 0.6; transform: translateX(${isNext ? "-" : ""}${width * 0.35}px); }
+                    75%  { opacity: 0.3; transform: translateX(${isNext ? "-" : ""}${width * 0.6}px); }
+                    100% { opacity: 0;   transform: translateX(${isNext ? "-" : ""}${width * 0.8}px); }
+                }
+                @keyframes ${id}_spineGlow {
+                    0%   { opacity: 0; }
+                    30%  { opacity: 1; }
+                    70%  { opacity: 1; }
                     100% { opacity: 0; }
                 }
             `}</style>
         </div>
     );
-}
-
-function showSpreadOrigin(_isCover: boolean): boolean {
-    return false;
 }

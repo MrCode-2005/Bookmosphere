@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { getSignedDownloadUrl } from "@/lib/s3";
 
 // GET /api/books — List user's books
 export async function GET(req: NextRequest) {
@@ -18,10 +19,21 @@ export async function GET(req: NextRequest) {
             orderBy: { updatedAt: "desc" },
         });
 
-        const booksWithProgress = books.map((book) => ({
-            ...book,
-            progress: book.progress[0] || null,
-        }));
+        const booksWithProgress = await Promise.all(
+            books.map(async (book) => {
+                // Generate signed URL for PDF files
+                let signedUrl: string | null = null;
+                if (book.fileType === "PDF") {
+                    const s3Key = book.fileUrl.split(".amazonaws.com/")[1] || book.fileUrl;
+                    signedUrl = await getSignedDownloadUrl(s3Key);
+                }
+                return {
+                    ...book,
+                    signedUrl,
+                    progress: book.progress[0] || null,
+                };
+            })
+        );
 
         return NextResponse.json({ success: true, data: booksWithProgress });
     } catch (error) {
