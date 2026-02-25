@@ -71,6 +71,8 @@ export default function PdfFlipbookReader({
     const pdfDocRef = useRef<any>(null);
     const renderedPagesRef = useRef<Set<number>>(new Set());
     const flipAudioRef = useRef<HTMLAudioElement | null>(null);
+    const soundEnabledRef = useRef(soundEnabled);
+    const onFlipRef = useRef(onFlip);
 
     /* ─── Load audio ─── */
     useEffect(() => {
@@ -78,6 +80,10 @@ export default function PdfFlipbookReader({
         flipAudioRef.current.preload = "auto";
         return () => { flipAudioRef.current = null; };
     }, []);
+
+    /* ─── Keep refs in sync ─── */
+    useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+    useEffect(() => { onFlipRef.current = onFlip; }, [onFlip]);
 
     /* ─── Render a single PDF page onto its canvas ─── */
     const renderPage = useCallback(async (pageNum: number) => {
@@ -207,13 +213,13 @@ export default function PdfFlipbookReader({
                     emitPageChange(pageIndex, totalPages || pageCount);
 
                     // Play real page-turn sound
-                    if (soundEnabled && flipAudioRef.current) {
+                    if (soundEnabledRef.current && flipAudioRef.current) {
                         try {
                             flipAudioRef.current.currentTime = 0;
                             flipAudioRef.current.play().catch(() => { });
                         } catch { }
                     }
-                    if (onFlip) onFlip();
+                    if (onFlipRef.current) onFlipRef.current();
 
                     // Lazy render surrounding pages
                     renderPage(pageNum - 1);
@@ -267,7 +273,7 @@ export default function PdfFlipbookReader({
                 pageFlipRef.current = null;
             }
         };
-    }, [pdfUrl, renderPage, onFlip, soundEnabled]);
+    }, [pdfUrl, renderPage]);
 
     /* ─── Navigation ─── */
     const flipNext = useCallback(() => pageFlipRef.current?.flipNext(FlipCorner.BOTTOM), []);
