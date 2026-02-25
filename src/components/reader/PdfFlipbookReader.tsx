@@ -316,7 +316,7 @@ export default function PdfFlipbookReader({
     const zoomIn = useCallback(() => {
         setZoomLevel((z) => {
             const nz = Math.min(3, z + 0.2);
-            if (viewerRef.current) viewerRef.current.style.transform = `scale(${nz})`;
+            if (flipbookRef.current) flipbookRef.current.style.transform = `scale(${nz})`;
             return nz;
         });
     }, []);
@@ -324,7 +324,7 @@ export default function PdfFlipbookReader({
     const zoomOut = useCallback(() => {
         setZoomLevel((z) => {
             const nz = Math.max(0.5, z - 0.2);
-            if (viewerRef.current) viewerRef.current.style.transform = `scale(${nz})`;
+            if (flipbookRef.current) flipbookRef.current.style.transform = `scale(${nz})`;
             return nz;
         });
     }, []);
@@ -453,12 +453,10 @@ export default function PdfFlipbookReader({
                     backgroundSize: "50px 50px",
                     padding: "20px 60px",
                     boxSizing: "border-box",
-                    transformOrigin: "center center",
-                    transition: "transform 0.2s ease",
                 }}
             >
                 {/* The StPageFlip container — HTML pages appended here */}
-                <div ref={flipbookRef} style={{ display: "none", boxShadow: "0 0 20px 0 rgba(0,0,0,0.5)" }} />
+                <div ref={flipbookRef} style={{ display: "none", boxShadow: "0 0 20px 0 rgba(0,0,0,0.5)", transformOrigin: "center center", transition: "transform 0.2s ease" }} />
             </div>
 
             {/* ─── Outline / Contents Panel ─── */}
