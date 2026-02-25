@@ -23,9 +23,16 @@ interface BookItem {
 }
 
 /* ─── Tiny component: renders page 1 of a PDF as a thumbnail ─── */
+const pdfOptions = {
+    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+    wasmUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/wasm/`,
+};
+
 function PdfCover({ url }: { url: string }) {
     return (
-        <Document file={url} loading={null} error={<span className="text-4xl opacity-60">📖</span>}>
+        <Document file={url} loading={null} error={<span className="text-4xl opacity-60">📖</span>} options={pdfOptions}>
             <Page
                 pageNumber={1}
                 width={240}
