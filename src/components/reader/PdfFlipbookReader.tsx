@@ -59,6 +59,7 @@ export default function PdfFlipbookReader({
     const [loadingText, setLoadingText] = useState("Processing PDF...");
     const [error, setError] = useState<string | null>(null);
     const [zoomLevel, setZoomLevel] = useState(1);
+    const [pageInputValue, setPageInputValue] = useState("1");
     const [outlineOpen, setOutlineOpen] = useState(false);
     const [outlineItems, setOutlineItems] = useState<{ title: string; page: number | null }[]>([]);
     const [outlineLoaded, setOutlineLoaded] = useState(false);
@@ -292,15 +293,23 @@ export default function PdfFlipbookReader({
     const handlePageInput = useCallback(
         (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key !== "Enter") return;
-            const val = parseInt((e.target as HTMLInputElement).value, 10);
+            const val = parseInt(pageInputValue, 10);
             if (val > 0 && val <= totalPages && pageFlipRef.current) {
                 pageFlipRef.current.turnToPage(val - 1);
                 setCurrentPage(val - 1);
                 emitPageChange(val - 1, totalPages);
+            } else {
+                // Reset to current page if invalid
+                setPageInputValue(String(currentPage + 1));
             }
         },
-        [totalPages]
+        [totalPages, pageInputValue, currentPage]
     );
+
+    // Keep input in sync when page changes via flipping
+    useEffect(() => {
+        setPageInputValue(String(currentPage + 1));
+    }, [currentPage]);
 
     /* ─── Fullscreen ─── */
     const toggleFullscreen = useCallback(() => {
@@ -504,109 +513,119 @@ export default function PdfFlipbookReader({
             {/* ─── Bottom Toolbar ─── */}
             {!loading && (
                 <div
-                    className="absolute z-[100] flex items-center gap-2.5"
+                    className="absolute z-[100] flex items-center justify-center"
                     style={{
                         bottom: 0,
-                        left: "50%",
-                        transform: "translateX(-50%)",
+                        left: 0,
+                        right: 0,
                         height: "60px",
-                        background: "rgba(31, 41, 55, 0.95)",
-                        padding: "0 1.5rem",
-                        borderRadius: "8px 8px 0 0",
-                        backdropFilter: "blur(8px)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderBottom: "none",
+                        backgroundColor: "#0b1120",
+                        backgroundImage:
+                            "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+                        backgroundSize: "50px 50px",
+                        borderTop: "1px solid rgba(255,255,255,0.1)",
                     }}
                 >
-                    {/* Prev */}
-                    <ToolbarBtn onClick={flipPrev} title="Previous Page">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="15 18 9 12 15 6" />
-                        </svg>
-                    </ToolbarBtn>
+                    <div
+                        className="flex items-center gap-2.5"
+                        style={{
+                            background: "rgba(31, 41, 55, 0.95)",
+                            padding: "0 1.5rem",
+                            borderRadius: "8px",
+                            backdropFilter: "blur(8px)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            height: "44px",
+                        }}
+                    >
+                        {/* Prev */}
+                        <ToolbarBtn onClick={flipPrev} title="Previous Page">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="15 18 9 12 15 6" />
+                            </svg>
+                        </ToolbarBtn>
 
-                    {/* Page Info */}
-                    <div className="flex items-center gap-1 mx-2.5 text-white font-mono text-sm">
-                        <input
-                            type="text"
-                            value={currentPage + 1}
-                            onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val)) {
-                                    // Allow typing but don't navigate yet
-                                }
-                            }}
-                            onKeyDown={handlePageInput}
-                            className="w-10 text-center rounded px-1 py-0.5"
-                            style={{ background: "rgba(0,0,0,0.5)", border: "1px solid #4b5563", color: "#fff" }}
-                        />
-                        <span className="text-gray-300">/ {totalPages}</span>
+                        {/* Page Info */}
+                        <div className="flex items-center gap-1 mx-2.5 text-white font-mono text-sm">
+                            <input
+                                type="text"
+                                value={pageInputValue}
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/[^0-9]/g, "");
+                                    setPageInputValue(raw);
+                                }}
+                                onKeyDown={handlePageInput}
+                                onBlur={() => setPageInputValue(String(currentPage + 1))}
+                                className="w-10 text-center rounded px-1 py-0.5"
+                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid #4b5563", color: "#fff" }}
+                            />
+                            <span className="text-gray-300">/ {totalPages}</span>
+                        </div>
+
+                        {/* Next */}
+                        <ToolbarBtn onClick={flipNext} title="Next Page">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                        </ToolbarBtn>
+
+                        <Divider />
+
+                        {/* Outline / Contents */}
+                        <ToolbarBtn onClick={toggleOutline} title="Contents">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="7" height="7" />
+                                <rect x="14" y="3" width="7" height="7" />
+                                <rect x="3" y="14" width="7" height="7" />
+                                <rect x="14" y="14" width="7" height="7" />
+                            </svg>
+                        </ToolbarBtn>
+
+                        <Divider />
+
+                        {/* Zoom In */}
+                        <ToolbarBtn onClick={zoomIn} title="Zoom In">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                <line x1="11" y1="8" x2="11" y2="14" />
+                                <line x1="8" y1="11" x2="14" y2="11" />
+                            </svg>
+                        </ToolbarBtn>
+
+                        {/* Zoom Out */}
+                        <ToolbarBtn onClick={zoomOut} title="Zoom Out">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                <line x1="8" y1="11" x2="14" y2="11" />
+                            </svg>
+                        </ToolbarBtn>
+
+                        {/* Fullscreen */}
+                        <ToolbarBtn onClick={toggleFullscreen} title="Fullscreen">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="15 3 21 3 21 9" />
+                                <polyline points="9 21 3 21 3 15" />
+                                <line x1="21" y1="3" x2="14" y2="10" />
+                                <line x1="3" y1="21" x2="10" y2="14" />
+                            </svg>
+                        </ToolbarBtn>
+
+                        {/* Sound Toggle */}
+                        <ToolbarBtn onClick={onToggleSound} title="Sound" active={soundEnabled}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                {soundEnabled ? (
+                                    <>
+                                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                    </>
+                                ) : (
+                                    <line x1="23" y1="9" x2="17" y2="15" />
+                                )}
+                            </svg>
+                        </ToolbarBtn>
                     </div>
-
-                    {/* Next */}
-                    <ToolbarBtn onClick={flipNext} title="Next Page">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                    </ToolbarBtn>
-
-                    <Divider />
-
-                    {/* Outline / Contents */}
-                    <ToolbarBtn onClick={toggleOutline} title="Contents">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="7" height="7" />
-                            <rect x="14" y="3" width="7" height="7" />
-                            <rect x="3" y="14" width="7" height="7" />
-                            <rect x="14" y="14" width="7" height="7" />
-                        </svg>
-                    </ToolbarBtn>
-
-                    <Divider />
-
-                    {/* Zoom In */}
-                    <ToolbarBtn onClick={zoomIn} title="Zoom In">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            <line x1="11" y1="8" x2="11" y2="14" />
-                            <line x1="8" y1="11" x2="14" y2="11" />
-                        </svg>
-                    </ToolbarBtn>
-
-                    {/* Zoom Out */}
-                    <ToolbarBtn onClick={zoomOut} title="Zoom Out">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            <line x1="8" y1="11" x2="14" y2="11" />
-                        </svg>
-                    </ToolbarBtn>
-
-                    {/* Fullscreen */}
-                    <ToolbarBtn onClick={toggleFullscreen} title="Fullscreen">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="15 3 21 3 21 9" />
-                            <polyline points="9 21 3 21 3 15" />
-                            <line x1="21" y1="3" x2="14" y2="10" />
-                            <line x1="3" y1="21" x2="10" y2="14" />
-                        </svg>
-                    </ToolbarBtn>
-
-                    {/* Sound Toggle */}
-                    <ToolbarBtn onClick={onToggleSound} title="Sound" active={soundEnabled}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                            {soundEnabled ? (
-                                <>
-                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                </>
-                            ) : (
-                                <line x1="23" y1="9" x2="17" y2="15" />
-                            )}
-                        </svg>
-                    </ToolbarBtn>
                 </div>
             )}
         </div>
