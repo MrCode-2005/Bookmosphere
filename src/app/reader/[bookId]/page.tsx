@@ -164,10 +164,13 @@ export default function ReaderPage() {
                     bookId={bookId}
                     pdfUrl={book!.signedUrl!}
                     totalPages={book!.totalPages}
+                    title={book!.title}
+                    author={book!.author}
                     initialPage={savedPage > 0 ? savedPage : 1}
                     onFlip={playFlipSound}
                     soundEnabled={soundEnabled}
                     onToggleSound={toggleSound}
+                    onBack={() => router.back()}
                 />
                 <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
             </div>

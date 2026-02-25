@@ -44,3 +44,6 @@ next-env.d.ts
 
 # uploads (reference videos, local files)
 /uploads/
+
+# FlipBook animation folder
+FlipBook animation/

@@ -4,11 +4,10 @@ import { useRef, useCallback, useEffect, useState } from "react";
 
 /**
  * Hook for page-flip sound effect.
- * Uses Web Audio API for low-latency playback.
+ * Uses a real MP3 file for authentic paper-turn sound.
  */
 export function usePageFlipSound() {
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const bufferRef = useRef<AudioBuffer | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
     const [enabled, setEnabled] = useState(() => {
         if (typeof window !== "undefined") {
             return localStorage.getItem("bookflow:sound") !== "off";
@@ -16,38 +15,14 @@ export function usePageFlipSound() {
         return true;
     });
 
-    // Load sound effect
+    // Load the real MP3 sound file
     useEffect(() => {
-        const loadSound = async () => {
-            try {
-                const ctx = new AudioContext();
-                audioContextRef.current = ctx;
-
-                // Generate a synthetic page-flip sound (short noise burst)
-                const sampleRate = ctx.sampleRate;
-                const duration = 0.15; // 150ms
-                const length = sampleRate * duration;
-                const buffer = ctx.createBuffer(1, length, sampleRate);
-                const data = buffer.getChannelData(0);
-
-                for (let i = 0; i < length; i++) {
-                    const t = i / sampleRate;
-                    // Quick fade in + slow fade out (envelope)
-                    const envelope = Math.min(t / 0.005, 1) * Math.exp(-t * 25);
-                    // Filtered noise
-                    data[i] = (Math.random() * 2 - 1) * envelope * 0.3;
-                }
-
-                bufferRef.current = buffer;
-            } catch {
-                // Web Audio not supported
-            }
-        };
-
-        loadSound();
+        const audio = new Audio("/sounds/page-flip.mp3");
+        audio.preload = "auto";
+        audioRef.current = audio;
 
         return () => {
-            audioContextRef.current?.close();
+            audioRef.current = null;
         };
     }, []);
 
@@ -57,24 +32,11 @@ export function usePageFlipSound() {
     }, [enabled]);
 
     const play = useCallback(() => {
-        if (!enabled || !audioContextRef.current || !bufferRef.current) return;
+        if (!enabled || !audioRef.current) return;
 
         try {
-            const ctx = audioContextRef.current;
-            if (ctx.state === "suspended") ctx.resume();
-
-            const source = ctx.createBufferSource();
-            source.buffer = bufferRef.current;
-
-            // Add a bit of randomization for naturalness
-            source.playbackRate.value = 0.9 + Math.random() * 0.2;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0.4;
-
-            source.connect(gain);
-            gain.connect(ctx.destination);
-            source.start();
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(() => { }); // Ignore autoplay prevention
         } catch {
             // Ignore playback errors
         }
