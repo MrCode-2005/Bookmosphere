@@ -93,30 +93,27 @@ export default function PdfFlipbookReader({
             const scale = (window.devicePixelRatio || 2.0) * 1.5; // DPR × 1.5 for crystal clarity
             const viewport = page.getViewport({ scale });
 
-            const canvas = document.getElementById(`canvas-${pageNum}`) as HTMLCanvasElement | null;
-            if (!canvas) { renderedPagesRef.current.delete(pageNum); return; }
-
+            // Render PDF page to an offscreen canvas
+            const canvas = document.createElement("canvas");
             const ctx = canvas.getContext("2d", { alpha: false })!;
             canvas.width = viewport.width;
             canvas.height = viewport.height;
 
             await page.render({ canvasContext: ctx, viewport }).promise;
 
-            // Generate a blob URL from the canvas and apply it as a background image
-            // This ensures StPageFlip's cloneNode() perfectly copies the rendered image.
-            canvas.toBlob((blob) => {
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const allContents = document.querySelectorAll(`div[id="page-content-${pageNum}"]`) as NodeListOf<HTMLDivElement>;
-                allContents.forEach((el) => {
-                    el.style.backgroundImage = `url(${url})`;
-                    el.style.backgroundColor = "#fff"; // Turn white once loaded
-                });
+            // Convert canvas rendering to a base64 Data URL and use it in an <img> tag.
+            // This is the ONLY reliable way to ensure StPageFlip's cloneNode() copies the visual content!
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
 
-                // Hide the per-page loader text
-                const allLoaders = document.querySelectorAll(`div[id="loader-${pageNum}"]`) as NodeListOf<HTMLDivElement>;
-                allLoaders.forEach((loader) => { loader.style.display = "none"; });
-            }, "image/jpeg", 0.9);
+            const allImages = document.querySelectorAll(`img[id="page-img-${pageNum}"]`) as NodeListOf<HTMLImageElement>;
+            allImages.forEach((img) => {
+                img.src = dataUrl;
+                img.style.display = "block";
+            });
+
+            // Hide the per-page loader text
+            const allLoaders = document.querySelectorAll(`div[id="loader-${pageNum}"]`) as NodeListOf<HTMLDivElement>;
+            allLoaders.forEach((loader) => { loader.style.display = "none"; });
         } catch (err) {
             console.error(`Error rendering page ${pageNum}:`, err);
             renderedPagesRef.current.delete(pageNum); // allow retry
@@ -172,9 +169,9 @@ export default function PdfFlipbookReader({
                         pageEl.setAttribute("data-density", "hard");
                     }
                     pageEl.innerHTML = `
-                        <div id="page-content-${i}" style="width:100%;height:100%;position:relative;background:#111827;background-size:contain;background-repeat:no-repeat;background-position:center;overflow:hidden">
+                        <div style="width:100%;height:100%;position:relative;background:#fff;overflow:hidden">
                             <div id="loader-${i}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#888;font-size:0.8rem">Loading...</div>
-                            <canvas id="canvas-${i}" style="display:none"></canvas>
+                            <img id="page-img-${i}" style="width:100%;height:100%;object-fit:contain;display:none" alt="Page ${i}" />
                         </div>
                     `;
                     fbEl.appendChild(pageEl);
