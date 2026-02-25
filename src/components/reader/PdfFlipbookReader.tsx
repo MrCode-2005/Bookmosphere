@@ -93,14 +93,25 @@ export default function PdfFlipbookReader({
             const scale = (window.devicePixelRatio || 2.0) * 1.5; // DPR × 1.5 for crystal clarity
             const viewport = page.getViewport({ scale });
 
-            const canvas = document.getElementById(`canvas-${pageNum}`) as HTMLCanvasElement | null;
-            if (!canvas) { renderedPagesRef.current.delete(pageNum); return; }
+            const canvases = document.querySelectorAll(`canvas[id="canvas-${pageNum}"]`) as NodeListOf<HTMLCanvasElement>;
+            if (canvases.length === 0) { renderedPagesRef.current.delete(pageNum); return; }
 
-            const ctx = canvas.getContext("2d", { alpha: false })!;
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+            const primaryCanvas = canvases[0];
+            const ctx = primaryCanvas.getContext("2d", { alpha: false })!;
+            primaryCanvas.width = viewport.width;
+            primaryCanvas.height = viewport.height;
 
             await page.render({ canvasContext: ctx, viewport }).promise;
+
+            // StPageFlip clones hard pages, but cloneNode doesn't copy canvas pixels.
+            // We must manually copy the rendered image to any cloned canvases.
+            for (let i = 1; i < canvases.length; i++) {
+                const cloneCanvas = canvases[i];
+                const cloneCtx = cloneCanvas.getContext("2d", { alpha: false })!;
+                cloneCanvas.width = viewport.width;
+                cloneCanvas.height = viewport.height;
+                cloneCtx.drawImage(primaryCanvas, 0, 0);
+            }
 
             // Hide the per-page loader text
             const loader = document.getElementById(`loader-${pageNum}`);
