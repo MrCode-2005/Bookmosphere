@@ -96,13 +96,11 @@ export default function PdfFlipbookReader({
     useEffect(() => {
         const fbEl = flipbookRef.current;
         if (!fbEl) return;
-        const parent = fbEl.querySelector(".stf__parent");
-        if (parent) {
-            if (darkMode) {
-                parent.classList.add("stf__dark");
-            } else {
-                parent.classList.remove("stf__dark");
-            }
+        // .stf__parent class is added to fbEl itself by the library
+        if (darkMode) {
+            fbEl.classList.add("stf__dark");
+        } else {
+            fbEl.classList.remove("stf__dark");
         }
         localStorage.setItem("bookmosphere-dark-reading", darkMode ? "true" : "false");
     }, [darkMode, loading]);
@@ -270,8 +268,7 @@ export default function PdfFlipbookReader({
 
                 // Apply dark mode class if currently active
                 if (localStorage.getItem("bookmosphere-dark-reading") === "true") {
-                    const parent = fbEl.querySelector(".stf__parent");
-                    if (parent) parent.classList.add("stf__dark");
+                    fbEl.classList.add("stf__dark");
                 }
 
                 // Initial shadow for front cover
