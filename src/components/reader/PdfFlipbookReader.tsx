@@ -64,6 +64,7 @@ export default function PdfFlipbookReader({
     const [outlineItems, setOutlineItems] = useState<{ title: string; page: number | null }[]>([]);
     const [outlineLoaded, setOutlineLoaded] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [curlAnimation, setCurlAnimation] = useState(true);
 
     /* ─── Draggable toolbar state ─── */
     const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
@@ -245,7 +246,7 @@ export default function PdfFlipbookReader({
                     drawShadow: true,
                     showPageCorners: true,
                     disableFlipByClick: false,
-                    startPage: initialPage > 1 ? initialPage - 1 : 0,
+                    startPage: initialPage > 0 ? initialPage : 0,
                     autoSize: true,
                 });
 
@@ -253,7 +254,7 @@ export default function PdfFlipbookReader({
                 pageFlipRef.current = pf;
 
                 // Initial render: pages around the start page
-                const startIdx = initialPage > 1 ? initialPage - 1 : 0;
+                const startIdx = initialPage > 0 ? initialPage : 0;
                 const startNum = startIdx + 1;
                 await renderPage(startNum);
                 if (startNum > 1) await renderPage(startNum - 1);
@@ -387,17 +388,52 @@ export default function PdfFlipbookReader({
     const toggleFullscreen = useCallback(() => {
         const elem = containerRef.current;
         if (!elem) return;
-        if (!document.fullscreenElement) {
-            elem.requestFullscreen?.();
-        } else {
-            document.exitFullscreen?.();
+        try {
+            if (!document.fullscreenElement) {
+                const rfs = elem.requestFullscreen || (elem as any).webkitRequestFullscreen || (elem as any).msRequestFullscreen;
+                if (rfs) rfs.call(elem);
+            } else {
+                const efs = document.exitFullscreen || (document as any).webkitExitFullscreen || (document as any).msExitFullscreen;
+                if (efs) efs.call(document);
+            }
+        } catch (err) {
+            console.warn("Fullscreen error:", err);
         }
     }, []);
 
     useEffect(() => {
-        const handler = () => setIsFullscreen(!!document.fullscreenElement);
+        const handler = () => setIsFullscreen(!!(document.fullscreenElement || (document as any).webkitFullscreenElement));
         document.addEventListener("fullscreenchange", handler);
-        return () => document.removeEventListener("fullscreenchange", handler);
+        document.addEventListener("webkitfullscreenchange", handler);
+        return () => {
+            document.removeEventListener("fullscreenchange", handler);
+            document.removeEventListener("webkitfullscreenchange", handler);
+        };
+    }, []);
+
+    /* ─── Curl animation toggle — also disable in highlight mode ─── */
+    useEffect(() => {
+        const pf = pageFlipRef.current;
+        if (!pf) return;
+        const settings = pf.getSettings();
+        if (highlightMode) {
+            // Disable curl when highlighting
+            settings.showPageCorners = false;
+        } else {
+            settings.showPageCorners = curlAnimation;
+        }
+    }, [highlightMode, curlAnimation]);
+
+    const toggleCurlAnimation = useCallback(() => {
+        setCurlAnimation(prev => {
+            const next = !prev;
+            const pf = pageFlipRef.current;
+            if (pf) {
+                const settings = pf.getSettings();
+                settings.showPageCorners = next;
+            }
+            return next;
+        });
     }, []);
 
     /* ─── Draggable toolbar handlers ─── */
@@ -778,26 +814,29 @@ export default function PdfFlipbookReader({
                     onMouseDown={handleToolbarMouseDown}
                 >
                     <div
-                        className={`flex ${getToolbarOrientation() === "vertical" ? "flex-col" : "flex-row"} items-center gap-1.5`}
+                        className={`flex ${getToolbarOrientation() === "vertical" ? "flex-col" : "flex-row"} items-center gap-1`}
                         style={{
                             background: "rgba(31, 41, 55, 0.95)",
-                            padding: getToolbarOrientation() === "vertical" ? "0.75rem 0.5rem" : "0 1rem",
+                            padding: getToolbarOrientation() === "vertical" ? "0.5rem 0.25rem" : "0 1rem",
                             borderRadius: "12px",
                             backdropFilter: "blur(12px)",
                             border: "1px solid rgba(255,255,255,0.12)",
                             height: getToolbarOrientation() === "vertical" ? "auto" : "42px",
+                            width: getToolbarOrientation() === "vertical" ? "42px" : "auto",
                             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
                         }}
                     >
                         {/* Prev */}
                         <ToolbarBtn onClick={flipPrev} title="Previous Page">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polyline points="15 18 9 12 15 6" />
                             </svg>
                         </ToolbarBtn>
 
-                        {/* Page Info */}
-                        <div className="flex items-center gap-1 mx-2.5 text-white font-mono text-sm">
+                        {/* Page Info — stacks vertically when toolbar is vertical */}
+                        <div className={`flex ${getToolbarOrientation() === "vertical" ? "flex-col" : "flex-row"} items-center gap-0.5 text-white font-mono`}
+                            style={{ fontSize: getToolbarOrientation() === "vertical" ? "10px" : "13px" }}
+                        >
                             <input
                                 type="text"
                                 value={pageInputValue}
@@ -807,10 +846,19 @@ export default function PdfFlipbookReader({
                                 }}
                                 onKeyDown={handlePageInput}
                                 onBlur={() => setPageInputValue(String(currentPage + 1))}
-                                className="w-10 text-center rounded px-1 py-0.5"
-                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid #4b5563", color: "#fff" }}
+                                style={{
+                                    width: getToolbarOrientation() === "vertical" ? "28px" : "36px",
+                                    textAlign: "center" as const,
+                                    borderRadius: 4,
+                                    padding: "1px 2px",
+                                    background: "rgba(0,0,0,0.5)",
+                                    border: "1px solid #4b5563",
+                                    color: "#fff",
+                                    fontSize: "inherit",
+                                    fontFamily: "inherit",
+                                }}
                             />
-                            <span className="text-gray-300">/ {totalPages}</span>
+                            <span className="text-gray-400" style={{ fontSize: "inherit" }}>/ {totalPages}</span>
                         </div>
 
                         {/* Next */}
@@ -820,7 +868,7 @@ export default function PdfFlipbookReader({
                             </svg>
                         </ToolbarBtn>
 
-                        <Divider />
+                        <Divider orientation={getToolbarOrientation()} />
 
                         {/* Outline / Contents */}
                         <ToolbarBtn onClick={toggleOutline} title="Contents">
@@ -832,7 +880,7 @@ export default function PdfFlipbookReader({
                             </svg>
                         </ToolbarBtn>
 
-                        <Divider />
+                        <Divider orientation={getToolbarOrientation()} />
 
                         {/* Zoom In */}
                         <ToolbarBtn onClick={zoomIn} title="Zoom In">
@@ -871,7 +919,17 @@ export default function PdfFlipbookReader({
                                 </svg>
                             )}
                         </ToolbarBtn>
-                        <Divider />
+
+                        {/* Curl Animation Toggle */}
+                        <ToolbarBtn onClick={toggleCurlAnimation} title={curlAnimation ? "Disable Page Curl" : "Enable Page Curl"} active={curlAnimation}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M4 4v16h16" />
+                                <path d="M20 4c0 0-4 2-8 8s-4 8-4 8" />
+                                {!curlAnimation && <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth="2.5" />}
+                            </svg>
+                        </ToolbarBtn>
+
+                        <Divider orientation={getToolbarOrientation()} />
 
                         {/* Highlight Marker */}
                         <div className="relative">
@@ -998,6 +1056,9 @@ function ToolbarBtn({
 }
 
 /* ─── Toolbar divider ─── */
-function Divider() {
+function Divider({ orientation = "horizontal" }: { orientation?: string }) {
+    if (orientation === "vertical") {
+        return <div style={{ width: "24px", height: "1px", background: "rgba(255,255,255,0.2)", margin: "2px 0" }} />;
+    }
     return <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.2)", margin: "0 4px" }} />;
 }

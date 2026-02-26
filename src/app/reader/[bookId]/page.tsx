@@ -166,7 +166,7 @@ export default function ReaderPage() {
                     totalPages={book!.totalPages}
                     title={book!.title}
                     author={book!.author}
-                    initialPage={savedPage > 0 ? savedPage : 1}
+                    initialPage={savedPage}
                     onFlip={playFlipSound}
                     soundEnabled={soundEnabled}
                     onToggleSound={toggleSound}
