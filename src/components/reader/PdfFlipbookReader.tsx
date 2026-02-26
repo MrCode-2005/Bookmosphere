@@ -238,6 +238,19 @@ export default function PdfFlipbookReader({
                     }
                 });
 
+                // Hide spine crease during page flip/fold animations
+                pf.on("changeState", (e) => {
+                    const state = e.data as string;
+                    const parent = fbEl.querySelector(".stf__parent") || fbEl.closest(".stf__parent");
+                    if (parent) {
+                        if (state === "read") {
+                            parent.classList.remove("flipping");
+                        } else {
+                            parent.classList.add("flipping");
+                        }
+                    }
+                });
+
                 // Initial shadow for front cover
                 fbEl.style.boxShadow = "20px 0 20px -5px rgba(0, 0, 0, 0.5)";
 
