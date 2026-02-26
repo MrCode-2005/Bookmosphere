@@ -20,6 +20,11 @@ interface BookItem {
     createdAt: string;
     signedUrl?: string;
     coverUrl?: string;
+    progress?: {
+        currentPage: number;
+        percentage: number;
+        updatedAt: string;
+    } | null;
 }
 
 /* ─── Tiny component: renders page 1 of a PDF as a thumbnail ─── */
@@ -281,64 +286,107 @@ export default function LibraryPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-                        {books.map((book) => (
-                            <div key={book.id} className="group relative">
-                                <button
-                                    onClick={() => {
-                                        if (book.status === "READY") router.push(`/reader/${book.id}`);
-                                    }}
-                                    disabled={book.status !== "READY"}
-                                    className="w-full bg-card border border-border rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative overflow-hidden">
-                                        {book.fileType === "PDF" && book.signedUrl ? (
-                                            <PdfCover url={book.signedUrl} />
-                                        ) : book.coverUrl ? (
-                                            <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <span className="text-4xl opacity-60">📖</span>
-                                        )}
-                                        {book.status === "PROCESSING" && (
-                                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                                <div className="animate-spin w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
-                                            </div>
-                                        )}
-                                        {book.status === "FAILED" && (
-                                            <div className="absolute inset-0 bg-red-100/60 flex items-center justify-center">
-                                                <span className="text-red-600 text-xs font-medium">Failed</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-3">
-                                        <h3 className="text-foreground text-sm font-medium truncate group-hover:text-indigo-600 transition-colors">
-                                            {book.title}
-                                        </h3>
-                                        {book.author && (
-                                            <p className="text-muted-foreground text-xs truncate mt-0.5">{book.author}</p>
-                                        )}
-                                        <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                                            <span>{book.totalPages} pages</span>
-                                            <span>·</span>
-                                            <span>{book.fileType}</span>
+                        {books.map((book, index) => {
+                            const pct = book.progress?.percentage ?? 0;
+                            const isCurrentlyReading = index === 0 && pct > 0 && pct < 100 && book.status === "READY";
+                            return (
+                                <div key={book.id} className="group relative">
+                                    {/* Currently Reading Badge */}
+                                    {isCurrentlyReading && (
+                                        <div
+                                            className="absolute -top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-md"
+                                            style={{
+                                                background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                                                color: "#fff",
+                                                letterSpacing: "0.02em",
+                                            }}
+                                        >
+                                            <span>📖</span>
+                                            <span>Currently Reading</span>
                                         </div>
-                                    </div>
-                                </button>
+                                    )}
 
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(book.id);
-                                    }}
-                                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/30 text-white/60 hover:text-red-400 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                                    title="Delete book"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <polyline points="3 6 5 6 21 6" />
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                    </svg>
-                                </button>
-                            </div>
-                        ))}
+                                    <button
+                                        onClick={() => {
+                                            if (book.status === "READY") router.push(`/reader/${book.id}`);
+                                        }}
+                                        disabled={book.status !== "READY"}
+                                        className="w-full bg-card border border-border rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={isCurrentlyReading ? { borderColor: "#22c55e", boxShadow: "0 0 0 1px #22c55e40" } : {}}
+                                    >
+                                        <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative overflow-hidden">
+                                            {book.fileType === "PDF" && book.signedUrl ? (
+                                                <PdfCover url={book.signedUrl} />
+                                            ) : book.coverUrl ? (
+                                                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-4xl opacity-60">📖</span>
+                                            )}
+                                            {book.status === "PROCESSING" && (
+                                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                                                    <div className="animate-spin w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
+                                                </div>
+                                            )}
+                                            {book.status === "FAILED" && (
+                                                <div className="absolute inset-0 bg-red-100/60 flex items-center justify-center">
+                                                    <span className="text-red-600 text-xs font-medium">Failed</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="p-3">
+                                            <h3 className="text-foreground text-sm font-medium truncate group-hover:text-indigo-600 transition-colors">
+                                                {book.title}
+                                            </h3>
+                                            {book.author && (
+                                                <p className="text-muted-foreground text-xs truncate mt-0.5">{book.author}</p>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                                                <span>{book.totalPages} pages</span>
+                                                <span>·</span>
+                                                <span>{book.fileType}</span>
+                                            </div>
+
+                                            {/* Reading Progress Bar */}
+                                            {pct > 0 && (
+                                                <div className="mt-2">
+                                                    <div className="flex items-center justify-between mb-0.5">
+                                                        <span className="text-[9px] text-muted-foreground">
+                                                            {pct >= 100 ? "Completed" : `${Math.round(pct)}% read`}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(99,102,241,0.15)" }}>
+                                                        <div
+                                                            className="h-full rounded-full transition-all duration-500"
+                                                            style={{
+                                                                width: `${Math.min(100, Math.round(pct))}%`,
+                                                                background: pct >= 100
+                                                                    ? "linear-gradient(90deg, #22c55e, #16a34a)"
+                                                                    : "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(book.id);
+                                        }}
+                                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/30 text-white/60 hover:text-red-400 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Delete book"
+                                        style={isCurrentlyReading ? { top: "16px" } : {}}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="3 6 5 6 21 6" />
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>

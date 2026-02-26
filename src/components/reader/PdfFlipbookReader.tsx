@@ -63,6 +63,38 @@ export default function PdfFlipbookReader({
     const [outlineOpen, setOutlineOpen] = useState(false);
     const [outlineItems, setOutlineItems] = useState<{ title: string; page: number | null }[]>([]);
     const [outlineLoaded, setOutlineLoaded] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    /* ─── Draggable toolbar state ─── */
+    const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragOffsetRef = useRef({ x: 0, y: 0 });
+    const toolbarRef = useRef<HTMLDivElement>(null);
+
+    /* ─── Highlight marker state ─── */
+    type HighlightRect = { pageNum: number; x: number; y: number; w: number; h: number; color: string; id: string };
+    const [highlightMode, setHighlightMode] = useState(false);
+    const [highlights, setHighlights] = useState<HighlightRect[]>([]);
+    const [highlightColor, setHighlightColor] = useState("#ffeb3b80"); // yellow semi-transparent
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const [activeHighlight, setActiveHighlight] = useState<{ pageNum: number; startX: number; startY: number } | null>(null);
+    const [highlightDragRect, setHighlightDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+    const highlightColors = ["#ffeb3b80", "#4caf5080", "#2196f380", "#e91e6380", "#ff980080"];
+
+    // Load highlights from localStorage
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(`bookmosphere-highlights-${bookId}`);
+            if (saved) setHighlights(JSON.parse(saved));
+        } catch { }
+    }, [bookId]);
+
+    // Save highlights when they change
+    useEffect(() => {
+        if (highlights.length > 0) {
+            localStorage.setItem(`bookmosphere-highlights-${bookId}`, JSON.stringify(highlights));
+        }
+    }, [highlights, bookId]);
     const [darkMode, setDarkMode] = useState(() => {
         if (typeof window !== "undefined") {
             return localStorage.getItem("bookmosphere-dark-reading") === "true";
@@ -213,17 +245,22 @@ export default function PdfFlipbookReader({
                     drawShadow: true,
                     showPageCorners: true,
                     disableFlipByClick: false,
-                    startPage: 0,
+                    startPage: initialPage > 1 ? initialPage - 1 : 0,
                     autoSize: true,
                 });
 
                 pf.loadFromHTML(document.querySelectorAll(".page"));
                 pageFlipRef.current = pf;
 
-                // Initial render: first 3 pages
+                // Initial render: pages around the start page
+                const startIdx = initialPage > 1 ? initialPage - 1 : 0;
+                const startNum = startIdx + 1;
+                await renderPage(startNum);
+                if (startNum > 1) await renderPage(startNum - 1);
+                if (startNum + 1 <= pageCount) await renderPage(startNum + 1);
+                if (startNum + 2 <= pageCount) await renderPage(startNum + 2);
+                // Also always render page 1 for cover
                 await renderPage(1);
-                if (pageCount > 1) await renderPage(2);
-                if (pageCount > 2) await renderPage(3);
 
                 // Event: on flip — lazy render + sound + shadow
                 pf.on("flip", (e) => {
@@ -277,7 +314,9 @@ export default function PdfFlipbookReader({
                 // Show the book
                 fbEl.style.display = "block";
                 setLoading(false);
-                emitPageChange(0, pageCount);
+                emitPageChange(startIdx, pageCount);
+                setCurrentPage(startIdx);
+                setPageInputValue(String(startIdx + 1));
 
                 // Background prefetch remaining pages
                 if (pageCount > 3) {
@@ -346,13 +385,159 @@ export default function PdfFlipbookReader({
 
     /* ─── Fullscreen ─── */
     const toggleFullscreen = useCallback(() => {
-        const elem = document.documentElement;
+        const elem = containerRef.current;
+        if (!elem) return;
         if (!document.fullscreenElement) {
             elem.requestFullscreen?.();
         } else {
             document.exitFullscreen?.();
         }
     }, []);
+
+    useEffect(() => {
+        const handler = () => setIsFullscreen(!!document.fullscreenElement);
+        document.addEventListener("fullscreenchange", handler);
+        return () => document.removeEventListener("fullscreenchange", handler);
+    }, []);
+
+    /* ─── Draggable toolbar handlers ─── */
+    const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
+        // Only drag from the toolbar background, not buttons
+        if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("input")) return;
+        e.preventDefault();
+        setIsDragging(true);
+        const toolbar = toolbarRef.current;
+        if (!toolbar) return;
+        const rect = toolbar.getBoundingClientRect();
+        dragOffsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }, []);
+
+    useEffect(() => {
+        if (!isDragging) return;
+        const handleMouseMove = (e: MouseEvent) => {
+            const container = containerRef.current;
+            if (!container) return;
+            const cRect = container.getBoundingClientRect();
+            const x = e.clientX - cRect.left - dragOffsetRef.current.x;
+            const y = e.clientY - cRect.top - dragOffsetRef.current.y;
+            setToolbarPos({ x, y });
+        };
+        const handleMouseUp = () => setIsDragging(false);
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+    }, [isDragging]);
+
+    // Determine toolbar orientation: vertical if near left/right edge
+    const getToolbarOrientation = useCallback(() => {
+        if (!toolbarPos || !containerRef.current) return "horizontal";
+        const cw = containerRef.current.clientWidth;
+        // If toolbar x is within 80px of left or right edge, go vertical
+        if (toolbarPos.x < 80 || toolbarPos.x > cw - 160) return "vertical";
+        return "horizontal";
+    }, [toolbarPos]);
+
+    /* ─── Highlight handlers ─── */
+    const handleHighlightMouseDown = useCallback((e: MouseEvent) => {
+        if (!highlightMode) return;
+        const target = e.target as HTMLElement;
+        const pageWrapper = target.closest(".page > div") as HTMLElement;
+        if (!pageWrapper) return;
+        const canvas = pageWrapper.querySelector("canvas") as HTMLCanvasElement;
+        if (!canvas) return;
+        const pageNumMatch = canvas.id.match(/canvas-(\d+)/);
+        if (!pageNumMatch) return;
+        const pageNum = parseInt(pageNumMatch[1]);
+        const rect = pageWrapper.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setActiveHighlight({ pageNum, startX: x, startY: y });
+        setHighlightDragRect({ x, y, w: 0, h: 0 });
+        e.preventDefault();
+        e.stopPropagation();
+    }, [highlightMode]);
+
+    const handleHighlightMouseMove = useCallback((e: MouseEvent) => {
+        if (!activeHighlight || !highlightMode) return;
+        const canvas = document.getElementById(`canvas-${activeHighlight.pageNum}`) as HTMLCanvasElement;
+        if (!canvas) return;
+        const pageWrapper = canvas.parentElement;
+        if (!pageWrapper) return;
+        const rect = pageWrapper.getBoundingClientRect();
+        const curX = ((e.clientX - rect.left) / rect.width) * 100;
+        const curY = ((e.clientY - rect.top) / rect.height) * 100;
+        const x = Math.min(activeHighlight.startX, curX);
+        const y = Math.min(activeHighlight.startY, curY);
+        const w = Math.abs(curX - activeHighlight.startX);
+        const h = Math.abs(curY - activeHighlight.startY);
+        setHighlightDragRect({ x, y, w, h });
+    }, [activeHighlight, highlightMode]);
+
+    const handleHighlightMouseUp = useCallback(() => {
+        if (!activeHighlight || !highlightDragRect) {
+            setActiveHighlight(null);
+            setHighlightDragRect(null);
+            return;
+        }
+        if (highlightDragRect.w > 1 && highlightDragRect.h > 1) {
+            const newHighlight: HighlightRect = {
+                pageNum: activeHighlight.pageNum,
+                x: highlightDragRect.x,
+                y: highlightDragRect.y,
+                w: highlightDragRect.w,
+                h: highlightDragRect.h,
+                color: highlightColor,
+                id: `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            };
+            setHighlights(prev => [...prev, newHighlight]);
+        }
+        setActiveHighlight(null);
+        setHighlightDragRect(null);
+    }, [activeHighlight, highlightDragRect, highlightColor]);
+
+    // Attach/detach highlight event listeners
+    useEffect(() => {
+        if (!highlightMode) return;
+        const viewer = viewerRef.current;
+        if (!viewer) return;
+        viewer.addEventListener("mousedown", handleHighlightMouseDown, true);
+        window.addEventListener("mousemove", handleHighlightMouseMove);
+        window.addEventListener("mouseup", handleHighlightMouseUp);
+        return () => {
+            viewer.removeEventListener("mousedown", handleHighlightMouseDown, true);
+            window.removeEventListener("mousemove", handleHighlightMouseMove);
+            window.removeEventListener("mouseup", handleHighlightMouseUp);
+        };
+    }, [highlightMode, handleHighlightMouseDown, handleHighlightMouseMove, handleHighlightMouseUp]);
+
+    // Render highlight overlays into pages
+    useEffect(() => {
+        // Clear any existing highlight overlays
+        document.querySelectorAll(".hl-overlay").forEach(el => el.remove());
+
+        highlights.forEach(hl => {
+            const canvas = document.getElementById(`canvas-${hl.pageNum}`);
+            if (!canvas) return;
+            const pageWrapper = canvas.parentElement;
+            if (!pageWrapper) return;
+            const overlay = document.createElement("div");
+            overlay.className = "hl-overlay";
+            overlay.style.cssText = `position:absolute;left:${hl.x}%;top:${hl.y}%;width:${hl.w}%;height:${hl.h}%;background:${hl.color};pointer-events:auto;cursor:pointer;border-radius:2px;z-index:5;`;
+            overlay.dataset.hlId = hl.id;
+            overlay.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                setHighlights(prev => prev.filter(h => h.id !== hl.id));
+            });
+            pageWrapper.appendChild(overlay);
+        });
+
+        return () => {
+            document.querySelectorAll(".hl-overlay").forEach(el => el.remove());
+        };
+    }, [highlights, currentPage]);
 
     /* ─── Zoom ─── */
     const zoomIn = useCallback(() => {
@@ -452,20 +637,20 @@ export default function PdfFlipbookReader({
     return (
         <div ref={containerRef} className="h-full w-full relative select-none" style={{ background: "#111827", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
 
-            {/* ─── Top Bar ─── */}
-            <div className="absolute top-0 left-0 right-0 z-[100] flex items-center gap-4 px-6 py-4"
+            {/* ─── Top Bar (thinner) ─── */}
+            <div className="absolute top-0 left-0 right-0 z-[100] flex items-center gap-3 px-5 py-2"
                 style={{ background: "rgba(17, 24, 39, 0.9)", backdropFilter: "blur(8px)", borderBottom: "1px solid rgba(255,255,255,0.1)" }}
             >
                 {onBack && (
-                    <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-medium">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                    <button onClick={onBack} className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-xs font-medium">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                         Library
                     </button>
                 )}
-                <h1 className="text-gray-100 font-semibold text-base truncate flex-1">{title}</h1>
-                {author && <span className="text-gray-400 text-sm hidden md:block">{author}</span>}
+                <h1 className="text-gray-100 font-semibold text-sm truncate flex-1">{title}</h1>
+                {author && <span className="text-gray-400 text-xs hidden md:block">{author}</span>}
             </div>
 
             {/* ─── Loading Overlay ─── */}
@@ -485,8 +670,8 @@ export default function PdfFlipbookReader({
                 ref={viewerRef}
                 className="absolute flex items-center justify-center overflow-hidden"
                 style={{
-                    top: "60px",
-                    bottom: "60px",
+                    top: "44px",
+                    bottom: 0,
                     left: 0,
                     right: 0,
                     backgroundColor: "#0b1120",
@@ -495,10 +680,43 @@ export default function PdfFlipbookReader({
                     backgroundSize: "50px 50px",
                     padding: "20px 60px",
                     boxSizing: "border-box",
+                    cursor: highlightMode ? "crosshair" : undefined,
                 }}
             >
                 {/* The StPageFlip container — HTML pages appended here */}
                 <div ref={flipbookRef} style={{ display: "none", boxShadow: "0 0 20px 0 rgba(0,0,0,0.5)", transformOrigin: "center center", transition: "transform 0.2s ease" }} />
+
+                {/* Highlight mode indicator */}
+                {highlightMode && (
+                    <div
+                        className="absolute top-2 left-1/2 z-[60] flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium"
+                        style={{ transform: "translateX(-50%)", background: "rgba(255,235,59,0.2)", color: "#ffd600", border: "1px solid rgba(255,235,59,0.3)" }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                        Highlight Mode — Drag to select · Right-click to remove
+                    </div>
+                )}
+
+                {/* Active drag rectangle preview */}
+                {highlightMode && activeHighlight && highlightDragRect && (() => {
+                    const canvas = document.getElementById(`canvas-${activeHighlight.pageNum}`);
+                    if (!canvas) return null;
+                    const pageWrapper = canvas.parentElement;
+                    if (!pageWrapper) return null;
+                    const pwRect = pageWrapper.getBoundingClientRect();
+                    const viewerRect = viewerRef.current?.getBoundingClientRect();
+                    if (!viewerRect) return null;
+                    const left = pwRect.left - viewerRect.left + (highlightDragRect.x / 100) * pwRect.width;
+                    const top = pwRect.top - viewerRect.top + (highlightDragRect.y / 100) * pwRect.height;
+                    const width = (highlightDragRect.w / 100) * pwRect.width;
+                    const height = (highlightDragRect.h / 100) * pwRect.height;
+                    return (
+                        <div
+                            className="absolute pointer-events-none z-[50]"
+                            style={{ left, top, width, height, background: highlightColor, border: `2px dashed ${highlightColor.slice(0, 7)}`, borderRadius: 2 }}
+                        />
+                    );
+                })()}
             </div>
 
             {/* ─── Outline / Contents Panel ─── */}
@@ -543,31 +761,32 @@ export default function PdfFlipbookReader({
                 </div>
             )}
 
-            {/* ─── Bottom Toolbar ─── */}
+            {/* ─── Floating Draggable Toolbar ─── */}
             {!loading && (
                 <div
-                    className="absolute z-[100] flex items-center justify-center"
+                    ref={toolbarRef}
+                    className="absolute z-[100]"
                     style={{
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: "60px",
-                        backgroundColor: "#0b1120",
-                        backgroundImage:
-                            "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
-                        backgroundSize: "50px 50px",
-                        borderTop: "1px solid rgba(255,255,255,0.1)",
+                        ...(toolbarPos
+                            ? { left: `${toolbarPos.x}px`, top: `${toolbarPos.y}px` }
+                            : { bottom: "20px", left: "50%", transform: "translateX(-50%)" }
+                        ),
+                        cursor: isDragging ? "grabbing" : "grab",
+                        userSelect: "none",
+                        transition: isDragging ? "none" : "box-shadow 0.2s",
                     }}
+                    onMouseDown={handleToolbarMouseDown}
                 >
                     <div
-                        className="flex items-center gap-2.5"
+                        className={`flex ${getToolbarOrientation() === "vertical" ? "flex-col" : "flex-row"} items-center gap-1.5`}
                         style={{
                             background: "rgba(31, 41, 55, 0.95)",
-                            padding: "0 1.5rem",
-                            borderRadius: "8px",
-                            backdropFilter: "blur(8px)",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            height: "44px",
+                            padding: getToolbarOrientation() === "vertical" ? "0.75rem 0.5rem" : "0 1rem",
+                            borderRadius: "12px",
+                            backdropFilter: "blur(12px)",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            height: getToolbarOrientation() === "vertical" ? "auto" : "42px",
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
                         }}
                     >
                         {/* Prev */}
@@ -635,14 +854,73 @@ export default function PdfFlipbookReader({
                         </ToolbarBtn>
 
                         {/* Fullscreen */}
-                        <ToolbarBtn onClick={toggleFullscreen} title="Fullscreen">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="15 3 21 3 21 9" />
-                                <polyline points="9 21 3 21 3 15" />
-                                <line x1="21" y1="3" x2="14" y2="10" />
-                                <line x1="3" y1="21" x2="10" y2="14" />
-                            </svg>
+                        <ToolbarBtn onClick={toggleFullscreen} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                            {isFullscreen ? (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="4 14 10 14 10 20" />
+                                    <polyline points="20 10 14 10 14 4" />
+                                    <line x1="14" y1="10" x2="21" y2="3" />
+                                    <line x1="3" y1="21" x2="10" y2="14" />
+                                </svg>
+                            ) : (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <polyline points="9 21 3 21 3 15" />
+                                    <line x1="21" y1="3" x2="14" y2="10" />
+                                    <line x1="3" y1="21" x2="10" y2="14" />
+                                </svg>
+                            )}
                         </ToolbarBtn>
+                        <Divider />
+
+                        {/* Highlight Marker */}
+                        <div className="relative">
+                            <ToolbarBtn
+                                onClick={() => { setHighlightMode(m => !m); setShowColorPicker(false); }}
+                                title={highlightMode ? "Exit Highlight Mode" : "Highlight Marker"}
+                                active={highlightMode}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 20h9" />
+                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                </svg>
+                            </ToolbarBtn>
+                            {highlightMode && (
+                                <ToolbarBtn onClick={() => setShowColorPicker(v => !v)} title="Change Color">
+                                    <div style={{ width: 14, height: 14, borderRadius: 3, background: highlightColor, border: "1px solid rgba(255,255,255,0.3)" }} />
+                                </ToolbarBtn>
+                            )}
+                            {showColorPicker && (
+                                <div
+                                    className="absolute z-[200] flex gap-1.5 p-2 rounded-lg"
+                                    style={{
+                                        bottom: "100%",
+                                        left: "50%",
+                                        transform: "translateX(-50%)",
+                                        marginBottom: "8px",
+                                        background: "rgba(31, 41, 55, 0.95)",
+                                        border: "1px solid rgba(255,255,255,0.15)",
+                                        backdropFilter: "blur(12px)",
+                                        boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                                    }}
+                                >
+                                    {highlightColors.map(c => (
+                                        <button
+                                            key={c}
+                                            onClick={(e) => { e.stopPropagation(); setHighlightColor(c); setShowColorPicker(false); }}
+                                            style={{
+                                                width: 24,
+                                                height: 24,
+                                                borderRadius: 4,
+                                                background: c,
+                                                border: c === highlightColor ? "2px solid #fff" : "1px solid rgba(255,255,255,0.2)",
+                                                cursor: "pointer",
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Dark Reading Mode Toggle */}
                         <ToolbarBtn onClick={() => setDarkMode(d => !d)} title={darkMode ? "Light Mode" : "Dark Mode"} active={darkMode}>

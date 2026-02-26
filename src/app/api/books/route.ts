@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
                     take: 1,
                 },
             },
-            orderBy: { updatedAt: "desc" },
         });
 
         const booksWithProgress = await Promise.all(
@@ -32,13 +31,26 @@ export async function GET(req: NextRequest) {
                         signedUrl = book.fileUrl;
                     }
                 }
+                const prog = book.progress[0] || null;
                 return {
                     ...book,
                     signedUrl,
-                    progress: book.progress[0] || null,
+                    progress: prog,
                 };
             })
         );
+
+        // Sort: books with recent progress first (by progress.updatedAt desc),
+        // then books without progress by createdAt desc
+        booksWithProgress.sort((a, b) => {
+            const aTime = a.progress?.updatedAt ? new Date(a.progress.updatedAt).getTime() : 0;
+            const bTime = b.progress?.updatedAt ? new Date(b.progress.updatedAt).getTime() : 0;
+            if (aTime && bTime) return bTime - aTime; // Both have progress: most recent first
+            if (aTime && !bTime) return -1; // a has progress, b doesn't
+            if (!aTime && bTime) return 1;  // b has progress, a doesn't
+            // Neither has progress: sort by createdAt desc
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
 
         return NextResponse.json({ success: true, data: booksWithProgress });
     } catch (error) {
