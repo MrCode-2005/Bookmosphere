@@ -105,7 +105,7 @@ export default function PdfFlipbookReader({
             }
         }
         localStorage.setItem("bookmosphere-dark-reading", darkMode ? "true" : "false");
-    }, [darkMode]);
+    }, [darkMode, loading]);
 
     /* ─── Render a single PDF page onto its canvas ─── */
     const renderPage = useCallback(async (pageNum: number) => {
@@ -266,6 +266,12 @@ export default function PdfFlipbookReader({
                     const spine = document.createElement("div");
                     spine.className = "stf__spine";
                     block.appendChild(spine);
+                }
+
+                // Apply dark mode class if currently active
+                if (localStorage.getItem("bookmosphere-dark-reading") === "true") {
+                    const parent = fbEl.querySelector(".stf__parent");
+                    if (parent) parent.classList.add("stf__dark");
                 }
 
                 // Initial shadow for front cover
