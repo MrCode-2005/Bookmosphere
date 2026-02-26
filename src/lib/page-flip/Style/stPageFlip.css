@@ -81,3 +81,19 @@
       rgba(0, 0, 0, 0.03) 70%,
       transparent 100%);
 }
+
+/* ─── Dark Reading Mode ─── */
+.stf__dark .page>div {
+  filter: invert(0.88) hue-rotate(180deg);
+  transition: filter 0.3s ease;
+}
+
+.stf__dark .page>div canvas {
+  /* Ensure canvas inherits the filter properly */
+  display: block;
+}
+
+/* When NOT in dark mode, allow smooth transition back */
+.page>div {
+  transition: filter 0.3s ease;
+}

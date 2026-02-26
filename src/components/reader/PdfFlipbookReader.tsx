@@ -63,6 +63,12 @@ export default function PdfFlipbookReader({
     const [outlineOpen, setOutlineOpen] = useState(false);
     const [outlineItems, setOutlineItems] = useState<{ title: string; page: number | null }[]>([]);
     const [outlineLoaded, setOutlineLoaded] = useState(false);
+    const [darkMode, setDarkMode] = useState(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("bookmosphere-dark-reading") === "true";
+        }
+        return false;
+    });
 
     /* ─── Refs ─── */
     const containerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +91,21 @@ export default function PdfFlipbookReader({
     /* ─── Keep refs in sync ─── */
     useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
     useEffect(() => { onFlipRef.current = onFlip; }, [onFlip]);
+
+    /* ─── Dark mode: toggle class on flipbook parent ─── */
+    useEffect(() => {
+        const fbEl = flipbookRef.current;
+        if (!fbEl) return;
+        const parent = fbEl.querySelector(".stf__parent");
+        if (parent) {
+            if (darkMode) {
+                parent.classList.add("stf__dark");
+            } else {
+                parent.classList.remove("stf__dark");
+            }
+        }
+        localStorage.setItem("bookmosphere-dark-reading", darkMode ? "true" : "false");
+    }, [darkMode]);
 
     /* ─── Render a single PDF page onto its canvas ─── */
     const renderPage = useCallback(async (pageNum: number) => {
@@ -618,6 +639,27 @@ export default function PdfFlipbookReader({
                                 <line x1="21" y1="3" x2="14" y2="10" />
                                 <line x1="3" y1="21" x2="10" y2="14" />
                             </svg>
+                        </ToolbarBtn>
+
+                        {/* Dark Reading Mode Toggle */}
+                        <ToolbarBtn onClick={() => setDarkMode(d => !d)} title={darkMode ? "Light Mode" : "Dark Mode"} active={darkMode}>
+                            {darkMode ? (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="5" />
+                                    <line x1="12" y1="1" x2="12" y2="3" />
+                                    <line x1="12" y1="21" x2="12" y2="23" />
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                                    <line x1="1" y1="12" x2="3" y2="12" />
+                                    <line x1="21" y1="12" x2="23" y2="12" />
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                                </svg>
+                            ) : (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                                </svg>
+                            )}
                         </ToolbarBtn>
 
                         {/* Sound Toggle */}
