@@ -238,6 +238,15 @@ export default function PdfFlipbookReader({
                     }
                 });
 
+                // Inject spine crease element inside .stf__block
+                // (must be in the same stacking context as pages for z-index to work)
+                const block = fbEl.querySelector(".stf__block");
+                if (block) {
+                    const spine = document.createElement("div");
+                    spine.className = "stf__spine";
+                    block.appendChild(spine);
+                }
+
                 // Initial shadow for front cover
                 fbEl.style.boxShadow = "20px 0 20px -5px rgba(0, 0, 0, 0.5)";
 
