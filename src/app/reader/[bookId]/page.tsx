@@ -113,6 +113,22 @@ export default function ReaderPage() {
 
                 setBook(bookData);
 
+                // Auto-migrate: if this book doesn't have originalFormat set,
+                // backfill it so the mode toggle works without re-uploading
+                if (!bookData.originalFormat) {
+                    fetch("/api/books/migrate", {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    }).catch(() => { /* best effort */ });
+
+                    // Set URLs locally so the current session works
+                    if (bookData.fileType === "PDF") {
+                        bookData.pdfFileUrl = bookData.pdfFileUrl || bookData.signedUrl;
+                    } else if (bookData.fileType === "EPUB") {
+                        bookData.epubFileUrl = bookData.epubFileUrl || bookData.signedUrl;
+                    }
+                }
+
                 // Determine default mode based on format
                 const format = bookData.originalFormat || bookData.fileType;
                 if (format === "EPUB" || bookData.epubFileUrl) {
