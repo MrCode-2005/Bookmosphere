@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
+import { useBookStore } from "@/stores/bookStore";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -56,8 +57,11 @@ function PdfCover({ url }: { url: string }) {
 export default function LibraryPage() {
     const router = useRouter();
     const { accessToken } = useAuthStore();
-    const [books, setBooks] = useState<BookItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const cachedBooks = useBookStore((s) => s.books);
+    const setCachedBooks = useBookStore((s) => s.setBooks);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [books, setBooks] = useState<BookItem[]>(cachedBooks as any);
+    const [loading, setLoading] = useState(cachedBooks.length === 0);
     const [uploading, setUploading] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
     const [uploadProgress, setUploadProgress] = useState("");
@@ -71,7 +75,10 @@ export default function LibraryPage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                setBooks(data.data || data.books || []);
+                const fetched = data.data || data.books || [];
+                setBooks(fetched);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                setCachedBooks(fetched as any);
             }
         } catch {
             // Ignore
@@ -262,7 +269,7 @@ export default function LibraryPage() {
                 )}
 
                 {/* Book Grid */}
-                {books.length === 0 ? (
+                {books.length === 0 && !loading ? (
                     <div className="bg-muted/30 border border-border rounded-2xl p-16 text-center">
                         <div className="text-6xl mb-6">📚</div>
                         <h3 className="text-foreground text-xl mb-3">Your library is empty</h3>
