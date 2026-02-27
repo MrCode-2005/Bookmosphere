@@ -182,18 +182,84 @@ async function countPdfPages(buffer: Buffer): Promise<{ totalPages: number; esti
 }
 
 /**
- * Parse EPUB metadata to extract page estimate and word count.
- * Uses a lightweight approach — doesn't fully render the EPUB.
+ * Parse EPUB content to extract accurate page/word counts.
+ * EPUBs are ZIP archives containing XHTML files.
+ * Extracts text from all HTML content files for accurate word count.
  */
-async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; estimatedWords: number }> {
-    // Estimate based on file size
-    // Average EPUB: ~1KB per page, ~250 words per page
-    const sizeKB = buffer.length / 1024;
-    const estimatedPages = Math.max(1, Math.round(sizeKB / 2));
-    const estimatedWords = estimatedPages * 250;
+async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; estimatedWords: number; coverUrl?: string }> {
+    try {
+        // EPUB files are ZIP archives — use JSZip (available from epub.js)
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(buffer);
 
-    console.log(`📘 EPUB: ~${estimatedPages} pages, ~${estimatedWords} words (estimated from ${Math.round(sizeKB)}KB)`);
-    return { estimatedPages, estimatedWords };
+        let totalText = "";
+        let coverPath = "";
+
+        // Find the OPF file to get metadata and cover
+        const containerFile = zip.file("META-INF/container.xml");
+        if (containerFile) {
+            const containerXml = await containerFile.async("string");
+            const rootfileMatch = containerXml.match(/full-path="([^"]+)"/);
+            if (rootfileMatch) {
+                const opfPath = rootfileMatch[1];
+                const opfFile = zip.file(opfPath);
+                if (opfFile) {
+                    const opfContent = await opfFile.async("string");
+                    // Find cover image reference
+                    const coverMeta = opfContent.match(/name="cover"\s+content="([^"]+)"/);
+                    if (coverMeta) {
+                        const coverId = coverMeta[1];
+                        const coverItem = opfContent.match(new RegExp(`id="${coverId}"[^>]+href="([^"]+)"`));
+                        if (coverItem) {
+                            const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1) : "";
+                            coverPath = opfDir + coverItem[1];
+                        }
+                    }
+                }
+            }
+        }
+
+        // Extract text from all HTML/XHTML files
+        const htmlFiles = Object.keys(zip.files).filter((name) => {
+            const lower = name.toLowerCase();
+            return lower.endsWith(".xhtml") || lower.endsWith(".html") || lower.endsWith(".htm");
+        });
+
+        for (const fileName of htmlFiles) {
+            try {
+                const content = await zip.file(fileName)?.async("string");
+                if (content) {
+                    // Strip HTML tags to get raw text
+                    const text = content
+                        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+                        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+                        .replace(/<[^>]+>/g, " ")
+                        .replace(/&nbsp;/g, " ")
+                        .replace(/&amp;/g, "&")
+                        .replace(/&lt;/g, "<")
+                        .replace(/&gt;/g, ">")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                    totalText += text + " ";
+                }
+            } catch {
+                // Skip files that can't be read
+            }
+        }
+
+        const words = totalText.split(/\s+/).filter(Boolean).length;
+        const estimatedPages = Math.max(1, Math.round(words / 250));
+
+        console.log(`📘 EPUB: ${words} words, ~${estimatedPages} pages (extracted from ${htmlFiles.length} HTML files)`);
+        return { estimatedPages, estimatedWords: words, coverUrl: coverPath || undefined };
+    } catch (err) {
+        console.warn("⚠️ EPUB parsing fallback (zip extraction failed):", err);
+        // Fallback: estimate from file size
+        const sizeKB = buffer.length / 1024;
+        const estimatedPages = Math.max(10, Math.round(sizeKB / 2));
+        const estimatedWords = estimatedPages * 250;
+        return { estimatedPages, estimatedWords };
+    }
 }
 
 /**

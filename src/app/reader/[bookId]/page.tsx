@@ -121,17 +121,28 @@ export default function ReaderPage() {
                         method: "POST",
                         headers: { Authorization: `Bearer ${accessToken}` },
                     }).catch(() => { /* best effort */ });
+                }
 
-                    // Set URLs locally so the current session works
-                    if (bookData.fileType === "PDF") {
-                        bookData.pdfFileUrl = bookData.pdfFileUrl || bookData.signedUrl;
-                    } else if (bookData.fileType === "EPUB") {
-                        bookData.epubFileUrl = bookData.epubFileUrl || bookData.signedUrl;
+                // Ensure EPUB and PDF books always have their format-specific URLs
+                if (bookData.fileType === "PDF") {
+                    bookData.pdfFileUrl = bookData.pdfFileUrl || bookData.signedUrl;
+                } else if (bookData.fileType === "EPUB") {
+                    bookData.epubFileUrl = bookData.epubFileUrl || bookData.signedUrl;
+                }
+
+                // Auto-reprocess old EPUB books with dummy content
+                if (bookData.fileType === "EPUB" && bookData.totalPages <= 1 && bookData.pages?.length <= 1) {
+                    const dummyContent = bookData.pages?.[0]?.content || "";
+                    if (dummyContent.includes("EPUB parsing not yet supported") || dummyContent.includes("Empty document")) {
+                        // Trigger re-processing in background
+                        fetch(`/api/books/${bookId}/reprocess`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        }).catch(() => { /* best effort */ });
                     }
                 }
 
                 // Default to Reader Mode for all formats
-                // PdfReaderMode extracts text directly, no EPUB needed
                 setReadingMode("reader");
 
                 // Restore saved progress

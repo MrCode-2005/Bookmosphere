@@ -318,6 +318,43 @@ export default function LibraryPage() {
                                                 <PdfCover url={book.signedUrl} />
                                             ) : book.coverUrl ? (
                                                 <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                                            ) : book.fileType === "EPUB" ? (
+                                                /* Styled cover for EPUB books without extracted cover art */
+                                                <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center"
+                                                    style={{
+                                                        background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)",
+                                                    }}>
+                                                    <div style={{
+                                                        fontSize: 14,
+                                                        fontWeight: 600,
+                                                        color: "#e0e7ff",
+                                                        lineHeight: 1.3,
+                                                        maxHeight: "60%",
+                                                        overflow: "hidden",
+                                                        fontFamily: "Georgia, serif",
+                                                    }}>
+                                                        {book.title}
+                                                    </div>
+                                                    {book.author && (
+                                                        <div style={{
+                                                            fontSize: 11,
+                                                            color: "#a5b4fc",
+                                                            marginTop: 8,
+                                                            fontStyle: "italic",
+                                                        }}>
+                                                            {book.author}
+                                                        </div>
+                                                    )}
+                                                    <div style={{
+                                                        fontSize: 9,
+                                                        color: "#6366f180",
+                                                        marginTop: 12,
+                                                        textTransform: "uppercase",
+                                                        letterSpacing: 2,
+                                                    }}>
+                                                        EPUB
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 <span className="text-4xl opacity-60">📖</span>
                                             )}
