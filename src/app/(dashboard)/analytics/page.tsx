@@ -181,8 +181,8 @@ export default function AnalyticsPage() {
                                     key={range}
                                     onClick={() => setTimeRange(range)}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${timeRange === range
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground"
+                                        ? "bg-indigo-600 text-white shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
                                         }`}
                                 >
                                     {range.charAt(0).toUpperCase() + range.slice(1)}
@@ -325,14 +325,16 @@ function TimeTooltip({ active, payload, label }: { active?: boolean; payload?: A
 
 // ── Heatmap ────────────────────────────────────────────────────────
 function HeatmapCalendar({ data }: { data: HeatmapEntry[] }) {
-    const heatmapGrid = useMemo(() => {
+    const [selectedCell, setSelectedCell] = useState<{ date: string; count: number; x: number; y: number } | null>(null);
+
+    const { heatmapGrid, monthLabels } = useMemo(() => {
         const countMap = new Map(data.map((d) => [d.date, d.count]));
         const weeks: { date: string; count: number; dayOfWeek: number }[][] = [];
         const today = new Date();
 
-        // Go back ~5 months (22 weeks)
+        // Go back ~6 months (26 weeks)
         const start = new Date(today);
-        start.setDate(start.getDate() - 22 * 7);
+        start.setDate(start.getDate() - 26 * 7);
         start.setDate(start.getDate() - start.getDay()); // align to Sunday
 
         let currentWeek: { date: string; count: number; dayOfWeek: number }[] = [];
@@ -354,42 +356,100 @@ function HeatmapCalendar({ data }: { data: HeatmapEntry[] }) {
         }
         if (currentWeek.length > 0) weeks.push(currentWeek);
 
-        return weeks;
+        // Calculate month labels with positions
+        const months: { label: string; col: number }[] = [];
+        let lastMonth = -1;
+        weeks.forEach((week, wi) => {
+            const firstDay = new Date(week[0].date);
+            const month = firstDay.getMonth();
+            if (month !== lastMonth) {
+                months.push({
+                    label: firstDay.toLocaleDateString("en", { month: "short" }),
+                    col: wi,
+                });
+                lastMonth = month;
+            }
+        });
+
+        return { heatmapGrid: weeks, monthLabels: months };
     }, [data]);
 
     const maxCount = Math.max(...data.map((d) => d.count), 1);
 
     const getColor = (count: number) => {
-        if (count === 0) return "bg-white/5";
+        if (count === 0) return "rgba(255,255,255,0.04)";
         const intensity = count / maxCount;
-        if (intensity <= 0.25) return "bg-indigo-900/50";
-        if (intensity <= 0.5) return "bg-indigo-700/60";
-        if (intensity <= 0.75) return "bg-indigo-500/70";
-        return "bg-indigo-400";
+        if (intensity <= 0.25) return "rgba(99,102,241,0.3)";
+        if (intensity <= 0.5) return "rgba(99,102,241,0.5)";
+        if (intensity <= 0.75) return "rgba(99,102,241,0.7)";
+        return "rgba(99,102,241,0.9)";
     };
 
     const dayLabels = ["", "Mon", "", "Wed", "", "Fri", ""];
+    const cellSize = 14;
+    const gap = 3;
+
+    // Close tooltip on outside click
+    useEffect(() => {
+        if (!selectedCell) return;
+        const handler = () => setSelectedCell(null);
+        window.addEventListener("click", handler);
+        return () => window.removeEventListener("click", handler);
+    }, [selectedCell]);
 
     return (
-        <div>
-            <div className="flex gap-[3px]">
+        <div className="relative">
+            {/* Month labels */}
+            <div className="flex" style={{ marginLeft: `${cellSize + gap + 4}px`, marginBottom: "4px" }}>
+                {monthLabels.map((m, i) => (
+                    <span
+                        key={i}
+                        className="text-[10px] text-muted-foreground"
+                        style={{
+                            position: "absolute",
+                            left: `${(cellSize + gap + 4) + m.col * (cellSize + gap)}px`,
+                        }}
+                    >
+                        {m.label}
+                    </span>
+                ))}
+            </div>
+
+            <div className="flex" style={{ gap: `${gap}px`, marginTop: "20px" }}>
                 {/* Day labels */}
-                <div className="flex flex-col gap-[3px] mr-1">
+                <div className="flex flex-col" style={{ gap: `${gap}px`, marginRight: "4px" }}>
                     {dayLabels.map((label, i) => (
-                        <div key={i} className="w-3 h-3 flex items-center justify-end">
-                            <span className="text-[8px] text-muted-foreground">{label}</span>
+                        <div key={i} style={{ width: cellSize, height: cellSize }} className="flex items-center justify-end">
+                            <span className="text-[9px] text-muted-foreground">{label}</span>
                         </div>
                     ))}
                 </div>
 
                 {/* Grid */}
                 {heatmapGrid.map((week, wi) => (
-                    <div key={wi} className="flex flex-col gap-[3px]">
+                    <div key={wi} className="flex flex-col" style={{ gap: `${gap}px` }}>
                         {week.map((day) => (
                             <div
                                 key={day.date}
-                                className={`w-3 h-3 rounded-[2px] ${getColor(day.count)} transition-colors`}
-                                title={`${day.date}: ${day.count} session${day.count !== 1 ? "s" : ""}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                    setSelectedCell({
+                                        date: day.date,
+                                        count: day.count,
+                                        x: rect.left + rect.width / 2,
+                                        y: rect.top - 8,
+                                    });
+                                }}
+                                style={{
+                                    width: cellSize,
+                                    height: cellSize,
+                                    borderRadius: 3,
+                                    background: getColor(day.count),
+                                    cursor: "pointer",
+                                    transition: "transform 0.1s, box-shadow 0.1s",
+                                }}
+                                className="hover:scale-125 hover:shadow-lg"
                             />
                         ))}
                     </div>
@@ -399,13 +459,46 @@ function HeatmapCalendar({ data }: { data: HeatmapEntry[] }) {
             {/* Legend */}
             <div className="flex items-center gap-2 mt-3 justify-end">
                 <span className="text-[10px] text-muted-foreground">Less</span>
-                <div className="w-3 h-3 rounded-[2px] bg-white/5" />
-                <div className="w-3 h-3 rounded-[2px] bg-indigo-900/50" />
-                <div className="w-3 h-3 rounded-[2px] bg-indigo-700/60" />
-                <div className="w-3 h-3 rounded-[2px] bg-indigo-500/70" />
-                <div className="w-3 h-3 rounded-[2px] bg-indigo-400" />
+                {[0, 0.25, 0.5, 0.75, 1].map((intensity) => (
+                    <div
+                        key={intensity}
+                        style={{
+                            width: cellSize,
+                            height: cellSize,
+                            borderRadius: 3,
+                            background: getColor(intensity === 0 ? 0 : Math.ceil(intensity * maxCount)),
+                        }}
+                    />
+                ))}
                 <span className="text-[10px] text-muted-foreground">More</span>
             </div>
+
+            {/* Click tooltip */}
+            {selectedCell && (
+                <div
+                    className="fixed z-[999] px-3 py-2 rounded-lg shadow-xl text-xs pointer-events-none"
+                    style={{
+                        left: selectedCell.x,
+                        top: selectedCell.y,
+                        transform: "translate(-50%, -100%)",
+                        background: "#1e1e2e",
+                        border: "1px solid rgba(99,102,241,0.4)",
+                        color: "#e2e8f0",
+                    }}
+                >
+                    <p className="font-semibold">
+                        {new Date(selectedCell.date + "T00:00:00").toLocaleDateString("en", {
+                            weekday: "long",
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                        })}
+                    </p>
+                    <p className="mt-0.5" style={{ color: selectedCell.count > 0 ? "#818cf8" : "#94a3b8" }}>
+                        {selectedCell.count} session{selectedCell.count !== 1 ? "s" : ""}
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 interface AutoSaveOptions {
     bookId: string;
     totalPages: number;
+    totalWords?: number;
     intervalMs?: number; // default 5000
 }
 
@@ -13,13 +14,22 @@ interface AutoSaveOptions {
  * Hook that auto-saves reading progress every N seconds.
  * Listens to bookflow:pagechange events and debounce-saves to the API.
  */
-export function useAutoSave({ bookId, totalPages, intervalMs = 5000 }: AutoSaveOptions) {
+export function useAutoSave({ bookId, totalPages, totalWords = 0, intervalMs = 5000 }: AutoSaveOptions) {
     const { accessToken } = useAuthStore();
     const currentPageRef = useRef(0);
     const sessionIdRef = useRef<string | null>(null);
     const sessionStartRef = useRef(Date.now());
     const pagesReadRef = useRef(0);
     const lastSavedPageRef = useRef(-1);
+    const accessTokenRef = useRef(accessToken);
+
+    // Keep token ref in sync
+    useEffect(() => {
+        accessTokenRef.current = accessToken;
+    }, [accessToken]);
+
+    // Avg words per page for estimation
+    const wordsPerPage = totalPages > 0 && totalWords > 0 ? Math.round(totalWords / totalPages) : 250;
 
     // Listen to page change events
     useEffect(() => {
@@ -37,32 +47,58 @@ export function useAutoSave({ bookId, totalPages, intervalMs = 5000 }: AutoSaveO
         return () => window.removeEventListener("bookflow:pagechange", handler);
     }, []);
 
-    // Save progress to API
+    // Save progress + update session
     const saveProgress = useCallback(async () => {
-        if (!accessToken || !bookId) return;
-        if (currentPageRef.current === lastSavedPageRef.current) return; // No change
+        const token = accessTokenRef.current;
+        if (!token || !bookId) return;
 
         const percentage = totalPages > 0
             ? ((currentPageRef.current + 1) / totalPages) * 100
             : 0;
 
-        try {
-            await fetch(`/api/progress/${bookId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({
-                    currentPage: currentPageRef.current,
-                    percentage: Math.min(100, Math.round(percentage)),
-                }),
-            });
-            lastSavedPageRef.current = currentPageRef.current;
-        } catch {
-            // Silently fail — will retry on next interval
+        // Save page progress
+        if (currentPageRef.current !== lastSavedPageRef.current) {
+            try {
+                await fetch(`/api/progress/${bookId}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        currentPage: currentPageRef.current,
+                        percentage: Math.min(100, Math.round(percentage)),
+                    }),
+                });
+                lastSavedPageRef.current = currentPageRef.current;
+            } catch {
+                // Silently fail — will retry on next interval
+            }
         }
-    }, [accessToken, bookId, totalPages]);
+
+        // Update reading session with accumulated stats
+        if (sessionIdRef.current) {
+            const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
+            const estimatedWords = pagesReadRef.current * wordsPerPage;
+            try {
+                await fetch("/api/sessions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionIdRef.current,
+                        pagesRead: pagesReadRef.current,
+                        wordsRead: estimatedWords,
+                        duration,
+                    }),
+                });
+            } catch {
+                // Will retry next interval
+            }
+        }
+    }, [bookId, totalPages, wordsPerPage]);
 
     // Start a reading session
     useEffect(() => {
@@ -88,28 +124,35 @@ export function useAutoSave({ bookId, totalPages, intervalMs = 5000 }: AutoSaveO
 
         startSession();
 
-        // End session on unmount
+        // End session on unmount — use fetch with keepalive for auth headers
         return () => {
-            if (sessionIdRef.current && accessToken) {
+            if (sessionIdRef.current && accessTokenRef.current) {
                 const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
-                // Use sendBeacon for reliable unload delivery
-                navigator.sendBeacon(
-                    "/api/sessions",
-                    new Blob(
-                        [JSON.stringify({
+                const estimatedWords = pagesReadRef.current * wordsPerPage;
+                try {
+                    fetch("/api/sessions", {
+                        method: "POST",
+                        keepalive: true,
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${accessTokenRef.current}`,
+                        },
+                        body: JSON.stringify({
                             sessionId: sessionIdRef.current,
                             pagesRead: pagesReadRef.current,
+                            wordsRead: estimatedWords,
                             duration,
                             endSession: true,
-                        })],
-                        { type: "application/json" }
-                    )
-                );
+                        }),
+                    });
+                } catch {
+                    // Best effort
+                }
             }
         };
-    }, [accessToken, bookId]);
+    }, [accessToken, bookId, wordsPerPage]);
 
-    // Auto-save interval
+    // Auto-save interval (progress + session)
     useEffect(() => {
         const interval = setInterval(saveProgress, intervalMs);
         return () => clearInterval(interval);

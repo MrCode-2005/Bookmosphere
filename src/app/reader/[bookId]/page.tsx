@@ -172,7 +172,7 @@ export default function ReaderPage() {
                     onToggleSound={toggleSound}
                     onBack={() => router.back()}
                 />
-                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
+                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} totalWords={book!.totalWords} />
             </div>
         );
     }
@@ -190,7 +190,7 @@ export default function ReaderPage() {
                     onFlip={playFlipSound}
                 />
 
-                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} />
+                <AutoSaveProvider bookId={bookId} totalPages={book!.totalPages} totalWords={book!.totalWords} />
 
                 <ControlPanel
                     onToggleSound={toggleSound}
@@ -284,7 +284,7 @@ function ReaderFooter() {
 }
 
 /** Invisible component that activates auto-save */
-function AutoSaveProvider({ bookId, totalPages }: { bookId: string; totalPages: number }) {
-    useAutoSave({ bookId, totalPages });
+function AutoSaveProvider({ bookId, totalPages, totalWords }: { bookId: string; totalPages: number; totalWords?: number }) {
+    useAutoSave({ bookId, totalPages, totalWords });
     return null;
 }

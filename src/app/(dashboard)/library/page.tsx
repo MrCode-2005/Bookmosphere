@@ -333,7 +333,7 @@ export default function LibraryPage() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="p-3">
+                                        <div className="p-3" style={{ minHeight: "90px" }}>
                                             <h3 className="text-foreground text-sm font-medium truncate group-hover:text-indigo-600 transition-colors">
                                                 {book.title}
                                             </h3>
@@ -347,26 +347,24 @@ export default function LibraryPage() {
                                             </div>
 
                                             {/* Reading Progress Bar */}
-                                            {pct > 0 && (
-                                                <div className="mt-2">
-                                                    <div className="flex items-center justify-between mb-0.5">
-                                                        <span className="text-[9px] text-muted-foreground">
-                                                            {pct >= 100 ? "Completed" : `${Math.round(pct)}% read`}
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(99,102,241,0.15)" }}>
-                                                        <div
-                                                            className="h-full rounded-full transition-all duration-500"
-                                                            style={{
-                                                                width: `${Math.min(100, Math.round(pct))}%`,
-                                                                background: pct >= 100
-                                                                    ? "linear-gradient(90deg, #22c55e, #16a34a)"
-                                                                    : "linear-gradient(90deg, #6366f1, #8b5cf6)",
-                                                            }}
-                                                        />
-                                                    </div>
+                                            <div className="mt-2">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <span className="text-[9px] text-muted-foreground">
+                                                        {pct >= 100 ? "Completed" : pct > 0 ? `${Math.round(pct)}% read` : "Not started"}
+                                                    </span>
                                                 </div>
-                                            )}
+                                                <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(99,102,241,0.15)" }}>
+                                                    <div
+                                                        className="h-full rounded-full transition-all duration-500"
+                                                        style={{
+                                                            width: `${Math.min(100, Math.round(pct))}%`,
+                                                            background: pct >= 100
+                                                                ? "linear-gradient(90deg, #22c55e, #16a34a)"
+                                                                : "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </button>
 

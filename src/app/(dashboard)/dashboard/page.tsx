@@ -50,9 +50,9 @@ export default function DashboardPage() {
 
                 if (booksRes.ok) {
                     const data = await booksRes.json();
-                    setBooks(data.books || []);
+                    setBooks(data.data || data.books || []);
 
-                    const progressPromises = (data.books || []).map(async (b: BookItem) => {
+                    const progressPromises = (data.data || data.books || []).map(async (b: BookItem) => {
                         const res = await fetch(`/api/progress/${b.id}`, {
                             headers: { Authorization: `Bearer ${accessToken}` },
                         });
