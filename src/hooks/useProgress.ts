@@ -176,7 +176,15 @@ export function useAutoSave({ bookId, totalPages, totalWords = 0, intervalMs = 5
 export async function fetchProgress(
     bookId: string,
     accessToken: string
-): Promise<{ currentPage: number; percentage: number } | null> {
+): Promise<{
+    currentPage: number;
+    percentage: number;
+    chapterIndex?: number;
+    paragraphIndex?: number;
+    readingMode?: string;
+    scrollOffset?: number;
+    wordIndex?: number;
+} | null> {
     try {
         const res = await fetch(`/api/progress/${bookId}`, {
             headers: { Authorization: `Bearer ${accessToken}` },

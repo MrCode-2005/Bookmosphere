@@ -28,6 +28,14 @@ enum BookStatus {
   FAILED
 }
 
+enum ConversionStatus {
+  NONE         // EPUB uploads — no conversion needed
+  PENDING      // PDF uploaded, conversion queued
+  PROCESSING   // Conversion in progress
+  COMPLETED    // EPUB generated successfully
+  FAILED       // Conversion failed, retry allowed
+}
+
 // ═══════════════════════════════════════
 // User
 // ═══════════════════════════════════════
@@ -58,19 +66,24 @@ model User {
 // ═══════════════════════════════════════
 
 model Book {
-  id         String     @id @default(cuid())
-  title      String
-  author     String?
-  totalPages Int        @default(0)
-  totalWords Int        @default(0)
-  fileUrl    String
-  fileType   FileType
-  coverUrl   String?
-  metadata   Json?
-  status     BookStatus @default(PROCESSING)
-  userId     String
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id               String           @id @default(cuid())
+  title            String
+  author           String?
+  totalPages       Int              @default(0)
+  totalWords       Int              @default(0)
+  fileUrl          String
+  fileType         FileType
+  originalFormat   FileType?
+  pdfFileUrl       String?
+  epubFileUrl      String?
+  coverUrl         String?
+  metadata         Json?
+  status           BookStatus       @default(PROCESSING)
+  conversionStatus ConversionStatus @default(NONE)
+  conversionError  String?
+  userId           String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookmarks  Bookmark[]
@@ -148,14 +161,17 @@ model Highlight {
 // ═══════════════════════════════════════
 
 model ReadingProgress {
-  id           String   @id @default(cuid())
-  userId       String
-  bookId       String
-  currentPage  Int      @default(0)
-  wordIndex    Int      @default(0)
-  scrollOffset Float    @default(0)
-  percentage   Float    @default(0)
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  bookId         String
+  currentPage    Int      @default(0)
+  wordIndex      Int      @default(0)
+  scrollOffset   Float    @default(0)
+  percentage     Float    @default(0)
+  chapterIndex   Int      @default(0)
+  paragraphIndex Int      @default(0)
+  readingMode    String   @default("reader") // "reader" | "flip"
+  updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
