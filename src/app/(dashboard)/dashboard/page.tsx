@@ -3,7 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
+import { useBookStore } from "@/stores/bookStore";
 import Link from "next/link";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+const pdfOptions = {
+    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+    wasmUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/wasm/`,
+};
 
 interface BookItem {
     id: string;
@@ -12,8 +25,15 @@ interface BookItem {
     totalPages: number;
     totalWords: number;
     coverUrl: string | null;
+    fileType: string;
+    signedUrl?: string;
     status: string;
     createdAt: string;
+    progress?: {
+        currentPage: number;
+        percentage: number;
+        updatedAt: string;
+    } | null;
 }
 
 interface ProgressItem {
@@ -30,13 +50,30 @@ interface SessionItem {
     startedAt: string;
 }
 
+function PdfCover({ url, width = 200 }: { url: string; width?: number }) {
+    return (
+        <Document file={url} loading={null} error={<span className="text-4xl opacity-60">📖</span>} options={pdfOptions}>
+            <Page
+                pageNumber={1}
+                width={width}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                loading={null}
+            />
+        </Document>
+    );
+}
+
 export default function DashboardPage() {
     const router = useRouter();
     const { accessToken, user } = useAuthStore();
-    const [books, setBooks] = useState<BookItem[]>([]);
+    const cachedBooks = useBookStore((s) => s.books);
+    const setCachedBooks = useBookStore((s) => s.setBooks);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [books, setBooks] = useState<BookItem[]>(cachedBooks as any);
     const [progressMap, setProgressMap] = useState<Record<string, ProgressItem>>({});
     const [sessions, setSessions] = useState<SessionItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(cachedBooks.length === 0);
 
     useEffect(() => {
         if (!accessToken) return;
@@ -50,23 +87,23 @@ export default function DashboardPage() {
 
                 if (booksRes.ok) {
                     const data = await booksRes.json();
-                    setBooks(data.data || data.books || []);
+                    const fetched = data.data || data.books || [];
+                    setBooks(fetched);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    setCachedBooks(fetched as any);
 
-                    const progressPromises = (data.data || data.books || []).map(async (b: BookItem) => {
-                        const res = await fetch(`/api/progress/${b.id}`, {
-                            headers: { Authorization: `Bearer ${accessToken}` },
-                        });
-                        if (res.ok) {
-                            const d = await res.json();
-                            return d.progress;
-                        }
-                        return null;
-                    });
-                    const progresses = await Promise.all(progressPromises);
+                    // Build progress map from book data (API already includes progress)
                     const map: Record<string, ProgressItem> = {};
-                    progresses.forEach((p: ProgressItem | null) => {
-                        if (p) map[p.bookId] = p;
-                    });
+                    for (const b of fetched) {
+                        if (b.progress) {
+                            map[b.id] = {
+                                bookId: b.id,
+                                currentPage: b.progress.currentPage,
+                                percentage: b.progress.percentage,
+                                updatedAt: b.progress.updatedAt,
+                            };
+                        }
+                    }
                     setProgressMap(map);
                 }
 
@@ -82,7 +119,7 @@ export default function DashboardPage() {
         };
 
         fetchData();
-    }, [accessToken]);
+    }, [accessToken, setCachedBooks]);
 
     const totalBooksRead = books.filter((b) => {
         const p = progressMap[b.id];
@@ -157,8 +194,12 @@ export default function DashboardPage() {
                             className="w-full md:w-auto bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5 hover:border-indigo-400 transition-all text-left group shadow-sm"
                         >
                             <div className="flex items-center gap-5">
-                                <div className="w-16 h-20 bg-gradient-to-br from-indigo-200 to-purple-200 rounded-lg flex items-center justify-center text-2xl shrink-0">
-                                    📖
+                                <div className="w-16 h-20 rounded-lg overflow-hidden shrink-0 bg-gradient-to-br from-indigo-200 to-purple-200 flex items-center justify-center">
+                                    {lastReadBook.fileType === "PDF" && lastReadBook.signedUrl ? (
+                                        <PdfCover url={lastReadBook.signedUrl} width={64} />
+                                    ) : (
+                                        <span className="text-2xl">📖</span>
+                                    )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-foreground font-medium truncate group-hover:text-indigo-600 transition-colors">
@@ -198,7 +239,7 @@ export default function DashboardPage() {
                         </Link>
                     </div>
 
-                    {readyBooks.length === 0 ? (
+                    {readyBooks.length === 0 && !loading ? (
                         <div className="bg-muted/50 border border-border rounded-xl p-12 text-center">
                             <div className="text-5xl mb-4">📚</div>
                             <h3 className="text-foreground text-lg mb-2">No books yet</h3>
@@ -254,8 +295,12 @@ function BookCard({
             onClick={onClick}
             className="group bg-card border border-border rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all text-left"
         >
-            <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative">
-                <span className="text-4xl opacity-60">📖</span>
+            <div className="aspect-[3/4] bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center relative overflow-hidden">
+                {book.fileType === "PDF" && book.signedUrl ? (
+                    <PdfCover url={book.signedUrl} width={200} />
+                ) : (
+                    <span className="text-4xl opacity-60">📖</span>
+                )}
                 {progress && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
                         <div
