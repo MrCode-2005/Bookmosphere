@@ -11,6 +11,7 @@ import { useAutoSave, fetchProgress } from "@/hooks/useProgress";
 
 // Dynamic imports — these require browser APIs
 const PdfFlipbookReader = dynamic(() => import("@/components/reader/PdfFlipbookReader"), { ssr: false });
+const PdfReaderMode = dynamic(() => import("@/components/reader/PdfReaderMode"), { ssr: false });
 const EpubReaderMode = dynamic(() => import("@/components/reader/EpubReaderMode"), { ssr: false });
 const EpubFlipMode = dynamic(() => import("@/components/reader/EpubFlipMode"), { ssr: false });
 
@@ -129,13 +130,9 @@ export default function ReaderPage() {
                     }
                 }
 
-                // Determine default mode based on format
-                const format = bookData.originalFormat || bookData.fileType;
-                if (format === "EPUB" || bookData.epubFileUrl) {
-                    setReadingMode("reader"); // Default to Reader Mode when EPUB available
-                } else if (format === "PDF") {
-                    setReadingMode("flip"); // Default to Flip Mode for PDFs without EPUB
-                }
+                // Default to Reader Mode for all formats
+                // PdfReaderMode extracts text directly, no EPUB needed
+                setReadingMode("reader");
 
                 // Restore saved progress
                 const progress = await fetchProgress(bookId, accessToken);
@@ -362,20 +359,18 @@ export default function ReaderPage() {
                 </div>
             )}
 
-            {/* Reader Mode but no EPUB — show flip mode with a message */}
+            {/* Reader Mode for PDFs — extract text and render in Apple Books typography */}
             {readingMode === "reader" && !hasEpub && hasPdf && (
-                <div style={{ width: "100%", height: "100%" }}>
-                    <PdfFlipbookReader
-                        bookId={bookId}
+                <div style={{ width: "100%", height: "100%", paddingTop: 44 }}>
+                    <PdfReaderMode
                         pdfUrl={pdfUrl!}
+                        bookId={bookId}
                         totalPages={book.totalPages}
-                        title={book.title}
-                        author={book.author}
                         initialPage={savedPage}
-                        onFlip={playFlipSound}
-                        soundEnabled={soundEnabled}
-                        onToggleSound={toggleSound}
-                        onBack={() => router.back()}
+                        fontSize={fontSize}
+                        lineHeight={1.65}
+                        maxWidth={720}
+                        onProgressChange={(p) => setCurrentProgress({ percentage: p.percentage, page: p.currentPage })}
                     />
                 </div>
             )}
