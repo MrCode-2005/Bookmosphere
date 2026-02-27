@@ -55,21 +55,42 @@ export async function PUT(
     if (scrollOffset !== undefined) updateData.scrollOffset = scrollOffset;
     if (wordIndex !== undefined) updateData.wordIndex = wordIndex;
 
-    const progress = await prisma.readingProgress.upsert({
-        where: { userId_bookId: { userId: payload.userId, bookId } },
-        update: updateData,
-        create: {
-            userId: payload.userId,
-            bookId,
-            currentPage: currentPage || 0,
-            percentage: percentage || 0,
-            chapterIndex: chapterIndex || 0,
-            paragraphIndex: paragraphIndex || 0,
-            readingMode: readingMode || "reader",
-            scrollOffset: scrollOffset || 0,
-            wordIndex: wordIndex || 0,
-        },
-    });
+    // Try with new fields first, fall back to core fields if DB hasn't been migrated
+    let progress;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        progress = await (prisma.readingProgress as any).upsert({
+            where: { userId_bookId: { userId: payload.userId, bookId } },
+            update: updateData,
+            create: {
+                userId: payload.userId,
+                bookId,
+                currentPage: currentPage || 0,
+                percentage: percentage || 0,
+                chapterIndex: chapterIndex || 0,
+                paragraphIndex: paragraphIndex || 0,
+                readingMode: readingMode || "reader",
+                scrollOffset: scrollOffset || 0,
+                wordIndex: wordIndex || 0,
+            },
+        });
+    } catch {
+        // New fields not in DB yet — fall back to core fields only
+        const coreData: Record<string, number> = {};
+        if (currentPage !== undefined) coreData.currentPage = currentPage;
+        if (percentage !== undefined) coreData.percentage = percentage;
+
+        progress = await prisma.readingProgress.upsert({
+            where: { userId_bookId: { userId: payload.userId, bookId } },
+            update: coreData,
+            create: {
+                userId: payload.userId,
+                bookId,
+                currentPage: currentPage || 0,
+                percentage: percentage || 0,
+            },
+        });
+    }
 
     return NextResponse.json({ progress });
 }

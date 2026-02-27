@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { queueConversion } from "@/lib/conversion/queue";
 
 // GET /api/books/[bookId]/convert — check conversion status
 export async function GET(
@@ -12,7 +11,8 @@ export async function GET(
         const payload = requireAuth(req);
         const { bookId } = await params;
 
-        const book = await prisma.book.findFirst({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const book = await (prisma.book as any).findFirst({
             where: { id: bookId, userId: payload.userId },
             select: {
                 id: true,
@@ -54,14 +54,17 @@ export async function POST(
             return NextResponse.json({ error: "Book not found" }, { status: 404 });
         }
 
-        if (book.originalFormat !== "PDF") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const bookAny = book as any;
+
+        if (bookAny.originalFormat !== "PDF") {
             return NextResponse.json(
                 { error: "Only PDF books can be converted" },
                 { status: 400 }
             );
         }
 
-        if (book.conversionStatus === "PROCESSING") {
+        if (bookAny.conversionStatus === "PROCESSING") {
             return NextResponse.json(
                 { error: "Conversion already in progress" },
                 { status: 409 }
@@ -73,11 +76,14 @@ export async function POST(
         const storageKey = metadata?.storageKey || "";
 
         // Queue conversion
-        await prisma.book.update({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (prisma.book as any).update({
             where: { id: bookId },
             data: { conversionStatus: "PENDING", conversionError: null },
         });
 
+        // Dynamic import to avoid Redis connection at module load time
+        const { queueConversion } = await import("@/lib/conversion/queue");
         await queueConversion({
             bookId,
             pdfStorageKey: storageKey,
