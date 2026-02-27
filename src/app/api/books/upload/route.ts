@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { processBook } from "@/workers/bookProcessor";
+import { validateFileName, validateFileSize, checkRateLimit, sanitizeFileName } from "@/lib/security/fileValidation";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -31,7 +32,25 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Validate file size (50MB)
+        // Security: Rate limiting
+        const rateCheck = checkRateLimit(payload.userId, 20, 60000);
+        if (!rateCheck.valid) {
+            return NextResponse.json(
+                { success: false, error: rateCheck.error },
+                { status: 429 }
+            );
+        }
+
+        // Security: Validate file name
+        const nameCheck = validateFileName(fileName);
+        if (!nameCheck.valid) {
+            return NextResponse.json(
+                { success: false, error: nameCheck.error },
+                { status: 400 }
+            );
+        }
+
+        // Validate file size (type-specific limits)
         if (fileSize > 50 * 1024 * 1024) {
             return NextResponse.json(
                 { success: false, error: "File too large (max 50MB)" },
@@ -85,24 +104,35 @@ export async function POST(req: NextRequest) {
         const signedUrl = `${SUPABASE_URL}/storage/v1${signData.url}`;
         const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${key}`;
 
-        // Create book record in DB
-        const book = await prisma.book.create({
-            data: {
-                title: title || fileName.replace(/\.[^.]+$/, ""),
-                fileUrl: publicUrl,
-                fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
-                totalPages: 0,
-                totalWords: 0,
-                status: "PROCESSING",
-                userId: payload.userId,
-                metadata: {
-                    originalName: fileName,
-                    fileSize,
-                    uploadedAt: new Date().toISOString(),
-                    storageKey: key,
-                },
+        // Create book record in DB with format-specific fields
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const createData: any = {
+            title: title || fileName.replace(/\.[^.]+$/, ""),
+            fileUrl: publicUrl,
+            fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
+            originalFormat: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
+            totalPages: 0,
+            totalWords: 0,
+            status: "PROCESSING",
+            userId: payload.userId,
+            metadata: {
+                originalName: fileName,
+                fileSize,
+                uploadedAt: new Date().toISOString(),
+                storageKey: key,
             },
-        });
+        };
+
+        // Set format-specific URLs
+        if (fileTypeLabel === "PDF") {
+            createData.pdfFileUrl = publicUrl;
+            createData.conversionStatus = "PENDING";
+        } else if (fileTypeLabel === "EPUB") {
+            createData.epubFileUrl = publicUrl;
+            createData.conversionStatus = "NONE";
+        }
+
+        const book = await prisma.book.create({ data: createData });
 
         return NextResponse.json({
             success: true,

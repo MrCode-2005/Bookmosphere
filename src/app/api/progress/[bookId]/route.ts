@@ -34,16 +34,40 @@ export async function PUT(
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const body = await req.json();
-    const { currentPage, percentage } = body;
+    const {
+        currentPage,
+        percentage,
+        chapterIndex,
+        paragraphIndex,
+        readingMode,
+        scrollOffset,
+        wordIndex,
+    } = body;
+
+    // Build update data — only include provided fields
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: Record<string, any> = {};
+    if (currentPage !== undefined) updateData.currentPage = currentPage;
+    if (percentage !== undefined) updateData.percentage = percentage;
+    if (chapterIndex !== undefined) updateData.chapterIndex = chapterIndex;
+    if (paragraphIndex !== undefined) updateData.paragraphIndex = paragraphIndex;
+    if (readingMode !== undefined) updateData.readingMode = readingMode;
+    if (scrollOffset !== undefined) updateData.scrollOffset = scrollOffset;
+    if (wordIndex !== undefined) updateData.wordIndex = wordIndex;
 
     const progress = await prisma.readingProgress.upsert({
         where: { userId_bookId: { userId: payload.userId, bookId } },
-        update: { currentPage, percentage },
+        update: updateData,
         create: {
             userId: payload.userId,
             bookId,
-            currentPage,
-            percentage,
+            currentPage: currentPage || 0,
+            percentage: percentage || 0,
+            chapterIndex: chapterIndex || 0,
+            paragraphIndex: paragraphIndex || 0,
+            readingMode: readingMode || "reader",
+            scrollOffset: scrollOffset || 0,
+            wordIndex: wordIndex || 0,
         },
     });
 
