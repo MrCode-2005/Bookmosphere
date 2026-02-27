@@ -189,7 +189,7 @@ export default function EpubReaderMode({
         book.ready.then(() => {
             return book.locations.generate(1024);
         }).then(() => {
-            setTotalPages(book.locations.length());
+            setTotalPages(Number(book.locations.length()) || 1);
             setIsReady(true);
         });
 
@@ -212,8 +212,8 @@ export default function EpubReaderMode({
         rendition.on("relocated", (location: { start: { cfi: string; displayed: { page: number; total: number }; href: string; index: number } }) => {
             const loc = location.start;
             const percentage = book.locations.percentageFromCfi(loc.cfi);
-            const pageNum = book.locations.locationFromCfi(loc.cfi) || 1;
-            const total = book.locations.length();
+            const pageNum = Number(book.locations.locationFromCfi(loc.cfi)) || 1;
+            const total = Number(book.locations.length()) || 1;
 
             setCurrentPage(pageNum);
             setTotalPages(total);
@@ -228,7 +228,7 @@ export default function EpubReaderMode({
 
             if (onProgressChange) {
                 onProgressChange({
-                    percentage: Math.round(percentage * 100),
+                    percentage: Math.round(Number(percentage) * 100),
                     currentPage: pageNum,
                     totalPages: total,
                     chapterIndex: loc.index || 0,
