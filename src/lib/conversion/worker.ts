@@ -1,5 +1,3 @@
-import { Worker } from "bullmq";
-import IORedis from "ioredis";
 import { prisma } from "@/lib/prisma";
 import { spawn } from "child_process";
 import { writeFile, mkdir, unlink } from "fs/promises";
@@ -35,7 +33,7 @@ async function uploadToSupabase(buffer: Buffer, storageKey: string): Promise<str
             Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
             "Content-Type": "application/epub+zip",
         },
-        body: buffer,
+        body: new Uint8Array(buffer),
     });
     if (!res.ok) throw new Error(`Failed to upload EPUB: ${res.statusText}`);
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storageKey}`;
@@ -79,7 +77,9 @@ async function convertPdfToEpub(
 /**
  * BullMQ worker that processes PDF→EPUB conversion jobs
  */
-export function startConversionWorker() {
+export async function startConversionWorker() {
+    const { Worker } = await import("bullmq");
+    const IORedis = (await import("ioredis")).default;
     const worker = new Worker<ConversionJob>(
         "pdf-to-epub",
         async (job) => {
@@ -142,7 +142,8 @@ export function startConversionWorker() {
             }
         },
         {
-            connection: new IORedis(REDIS_URL, { maxRetriesPerRequest: null }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            connection: new IORedis(REDIS_URL, { maxRetriesPerRequest: null }) as any,
             concurrency: 2,
         },
     );
