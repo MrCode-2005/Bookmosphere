@@ -31,12 +31,10 @@ export function AuthGuard({ children, requireAdmin = false }: AuthGuardProps) {
         }
     }, [isAuthenticated, isLoading, user, requireAdmin, router]);
 
+    // While loading, still render children for instant page transition
+    // The redirect effect will handle unauthorized users once loading completes
     if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="animate-pulse text-muted-foreground">Loading...</div>
-            </div>
-        );
+        return <>{children}</>;
     }
 
     if (!isAuthenticated) return null;
