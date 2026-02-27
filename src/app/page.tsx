@@ -20,7 +20,7 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#0f0d1a] via-[#1a1528] to-[#0f0d1a]">
       <div className="text-center space-y-6">
         <h1 className="text-6xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-          BookFlow
+          Bookmosphere
         </h1>
         <p className="text-xl text-white/50 max-w-md">
           Immersive flipbook reading platform. Upload, read, and track your reading journey.

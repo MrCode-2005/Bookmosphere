@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BookFlow — Immersive Reading Platform",
+  title: "Bookmosphere — Immersive Reading Platform",
   description: "A premium digital reading platform with realistic flipbook experience. Upload PDFs, EPUBs, and more.",
   keywords: ["reading", "ebook", "flipbook", "pdf reader", "digital library"],
 };

@@ -34,7 +34,7 @@ export default function RegisterPage() {
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
                     <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
-                        BookFlow
+                        Bookmosphere
                     </CardTitle>
                     <CardDescription>Create your free account</CardDescription>
                 </CardHeader>
