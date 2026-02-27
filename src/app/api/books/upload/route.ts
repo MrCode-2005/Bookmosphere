@@ -104,35 +104,58 @@ export async function POST(req: NextRequest) {
         const signedUrl = `${SUPABASE_URL}/storage/v1${signData.url}`;
         const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${key}`;
 
-        // Create book record in DB with format-specific fields
+        // Create book record in DB
+        // Try with new format-specific fields first, fall back to core fields if DB hasn't been migrated
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const createData: any = {
-            title: title || fileName.replace(/\.[^.]+$/, ""),
-            fileUrl: publicUrl,
-            fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
-            originalFormat: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
-            totalPages: 0,
-            totalWords: 0,
-            status: "PROCESSING",
-            userId: payload.userId,
-            metadata: {
-                originalName: fileName,
-                fileSize,
-                uploadedAt: new Date().toISOString(),
-                storageKey: key,
-            },
-        };
+        let book: any;
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const createData: any = {
+                title: title || fileName.replace(/\.[^.]+$/, ""),
+                fileUrl: publicUrl,
+                fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
+                originalFormat: fileTypeLabel,
+                totalPages: 0,
+                totalWords: 0,
+                status: "PROCESSING",
+                userId: payload.userId,
+                metadata: {
+                    originalName: fileName,
+                    fileSize,
+                    uploadedAt: new Date().toISOString(),
+                    storageKey: key,
+                },
+            };
 
-        // Set format-specific URLs
-        if (fileTypeLabel === "PDF") {
-            createData.pdfFileUrl = publicUrl;
-            createData.conversionStatus = "PENDING";
-        } else if (fileTypeLabel === "EPUB") {
-            createData.epubFileUrl = publicUrl;
-            createData.conversionStatus = "NONE";
+            if (fileTypeLabel === "PDF") {
+                createData.pdfFileUrl = publicUrl;
+                createData.conversionStatus = "PENDING";
+            } else if (fileTypeLabel === "EPUB") {
+                createData.epubFileUrl = publicUrl;
+                createData.conversionStatus = "NONE";
+            }
+
+            book = await prisma.book.create({ data: createData });
+        } catch {
+            // New fields not in DB yet — create with core fields only
+            book = await prisma.book.create({
+                data: {
+                    title: title || fileName.replace(/\.[^.]+$/, ""),
+                    fileUrl: publicUrl,
+                    fileType: fileTypeLabel as "PDF" | "EPUB" | "DOCX" | "TXT",
+                    totalPages: 0,
+                    totalWords: 0,
+                    status: "PROCESSING",
+                    userId: payload.userId,
+                    metadata: {
+                        originalName: fileName,
+                        fileSize,
+                        uploadedAt: new Date().toISOString(),
+                        storageKey: key,
+                    },
+                },
+            });
         }
-
-        const book = await prisma.book.create({ data: createData });
 
         return NextResponse.json({
             success: true,

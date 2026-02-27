@@ -20,16 +20,14 @@ export async function GET(req: NextRequest) {
 
         const booksWithProgress = await Promise.all(
             books.map(async (book) => {
-                // Generate signed URL for PDF files
+                // Generate signed URL for all file types
                 let signedUrl: string | null = null;
-                if (book.fileType === "PDF") {
-                    const s3Key = book.fileUrl.split(".amazonaws.com/")[1];
-                    if (s3Key) {
-                        signedUrl = await getSignedDownloadUrl(s3Key);
-                    } else {
-                        // fileUrl is already a full Supabase/public URL
-                        signedUrl = book.fileUrl;
-                    }
+                const s3Key = book.fileUrl.split(".amazonaws.com/")[1];
+                if (s3Key) {
+                    signedUrl = await getSignedDownloadUrl(s3Key);
+                } else {
+                    // fileUrl is already a full Supabase/public URL
+                    signedUrl = book.fileUrl;
                 }
                 const prog = book.progress[0] || null;
                 return {

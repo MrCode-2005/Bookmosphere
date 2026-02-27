@@ -82,21 +82,35 @@ export async function processBook(bookId: string, storageKey: string) {
         const finalPageCount = ["PDF", "EPUB"].includes(book.fileType) ? pdfPageCount : pages.length;
         const publicUrl = book.fileUrl;
 
-        // Set format-specific fields
-        if (book.fileType === "PDF") {
-            await prisma.book.update({
-                where: { id: bookId },
-                data: {
-                    totalPages: finalPageCount,
-                    totalWords,
-                    status: "READY",
-                    originalFormat: "PDF",
-                    pdfFileUrl: publicUrl,
-                    conversionStatus: "PENDING",
-                },
-            });
+        // Core fields that always exist
+        const coreUpdate = {
+            totalPages: finalPageCount,
+            totalWords,
+            status: "READY" as const,
+        };
 
-            // Queue PDF→EPUB conversion (non-blocking)
+        // Try to set format-specific fields (may fail if DB migration hasn't been applied yet)
+        if (book.fileType === "PDF") {
+            try {
+                await prisma.book.update({
+                    where: { id: bookId },
+                    data: {
+                        ...coreUpdate,
+                        originalFormat: "PDF",
+                        pdfFileUrl: publicUrl,
+                        conversionStatus: "PENDING",
+                    },
+                });
+            } catch {
+                // New fields not in DB yet — fall back to core update only
+                console.warn(`⚠️ New fields not available, updating core fields only for book ${bookId}`);
+                await prisma.book.update({
+                    where: { id: bookId },
+                    data: coreUpdate,
+                });
+            }
+
+            // Queue PDF→EPUB conversion (non-blocking, optional)
             try {
                 const { queueConversion } = await import("@/lib/conversion/queue");
                 await queueConversion({
@@ -108,28 +122,30 @@ export async function processBook(bookId: string, storageKey: string) {
                 console.log(`🔄 Queued conversion for book ${bookId}`);
             } catch (err) {
                 console.warn(`⚠️ Could not queue conversion (Redis may be unavailable):`, err);
-                // Book is still READY for Flip Mode — conversion is optional
             }
         } else if (book.fileType === "EPUB") {
-            await prisma.book.update({
-                where: { id: bookId },
-                data: {
-                    totalPages: finalPageCount,
-                    totalWords,
-                    status: "READY",
-                    originalFormat: "EPUB",
-                    epubFileUrl: publicUrl,
-                    conversionStatus: "NONE",
-                },
-            });
+            try {
+                await prisma.book.update({
+                    where: { id: bookId },
+                    data: {
+                        ...coreUpdate,
+                        originalFormat: "EPUB",
+                        epubFileUrl: publicUrl,
+                        conversionStatus: "NONE",
+                    },
+                });
+            } catch {
+                // New fields not in DB yet — fall back to core update only
+                console.warn(`⚠️ New fields not available, updating core fields only for book ${bookId}`);
+                await prisma.book.update({
+                    where: { id: bookId },
+                    data: coreUpdate,
+                });
+            }
         } else {
             await prisma.book.update({
                 where: { id: bookId },
-                data: {
-                    totalPages: finalPageCount,
-                    totalWords,
-                    status: "READY",
-                },
+                data: coreUpdate,
             });
         }
 
