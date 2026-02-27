@@ -248,24 +248,47 @@ export default function ReaderPage() {
 
                 {/* Controls */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* Mode Toggle */}
+                    {/* Mode Toggle — Segmented Control */}
                     {(hasEpub || hasPdf) && (
-                        <button
-                            onClick={toggleMode}
-                            style={{
-                                background: readingMode === "reader" ? "#1a1a2e" : "#2e1a1a",
-                                border: "1px solid #333",
-                                borderRadius: 8,
-                                padding: "4px 12px",
-                                color: "#ccc",
-                                fontSize: 12,
-                                cursor: "pointer",
-                                transition: "all 0.2s",
-                            }}
-                            title={readingMode === "reader" ? "Switch to Flip Mode" : "Switch to Reader Mode"}
-                        >
-                            {readingMode === "reader" ? "📖 Reader" : "📕 Flip"}
-                        </button>
+                        <div style={{
+                            display: "flex",
+                            background: "#111",
+                            borderRadius: 8,
+                            border: "1px solid #333",
+                            overflow: "hidden",
+                        }}>
+                            <button
+                                onClick={() => setReadingMode("reader")}
+                                style={{
+                                    padding: "5px 14px",
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    cursor: "pointer",
+                                    border: "none",
+                                    background: readingMode === "reader" ? "#2563eb" : "transparent",
+                                    color: readingMode === "reader" ? "#fff" : "#666",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                Reader
+                            </button>
+                            <button
+                                onClick={() => setReadingMode("flip")}
+                                style={{
+                                    padding: "5px 14px",
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    cursor: "pointer",
+                                    border: "none",
+                                    borderLeft: "1px solid #333",
+                                    background: readingMode === "flip" ? "#2563eb" : "transparent",
+                                    color: readingMode === "flip" ? "#fff" : "#666",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                Flip
+                            </button>
+                        </div>
                     )}
 
                     {/* Sound Toggle */}
