@@ -56,7 +56,7 @@ export default function ReaderPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [readingMode, setReadingMode] = useState<ReadingMode>("reader");
     const [currentProgress, setCurrentProgress] = useState({ percentage: 0, page: 0 });
-    const [showUI, setShowUI] = useState(false);
+    const [showUI, setShowUI] = useState(true);
     const [chapterTitle, setChapterTitle] = useState("");
     const [progressHovered, setProgressHovered] = useState(false);
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -235,18 +235,6 @@ export default function ReaderPage() {
     // ─── Render based on mode ───
     return (
         <div ref={containerRef} className="h-screen w-screen relative" style={{ background: "#000", cursor: "default" }}>
-            {/* Center tap zone — toggles UI */}
-            <div
-                onClick={toggleUI}
-                style={{
-                    position: "absolute",
-                    top: "15%",
-                    bottom: "15%",
-                    left: "25%",
-                    right: "25%",
-                    zIndex: 30,
-                }}
-            />
 
             {/* ═══ TOP BAR ═══ (auto-hide) */}
             <div style={{
@@ -425,6 +413,7 @@ export default function ReaderPage() {
                         initialCfi={savedCfi}
                         initialChapter={savedChapter}
                         onProgressChange={handleEpubProgress}
+                        onCenterTap={toggleUI}
                         fontSize={fontSize}
                     />
                 </div>

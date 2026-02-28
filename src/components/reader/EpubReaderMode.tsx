@@ -18,6 +18,7 @@ interface EpubReaderModeProps {
         chapterTitle: string;
     }) => void;
     onTocReady?: (toc: TocItem[]) => void;
+    onCenterTap?: () => void;
     fontSize?: number;
     lineHeight?: number;
     maxWidth?: number;
@@ -36,6 +37,7 @@ export default function EpubReaderMode({
     initialChapter,
     onProgressChange,
     onTocReady,
+    onCenterTap,
     fontSize = 18,
     lineHeight = 1.65,
     maxWidth = 720,
@@ -243,6 +245,23 @@ export default function EpubReaderMode({
             }
         });
 
+        // Handle clicks inside the epub iframe for center-tap UI toggle
+        rendition.on("click", (e: MouseEvent) => {
+            const iframe = viewerRef.current?.querySelector("iframe");
+            if (!iframe) return;
+            const rect = iframe.getBoundingClientRect();
+            const x = e.clientX;
+            const relX = x / rect.width;
+            if (relX < 0.25) {
+                rendition.prev();
+            } else if (relX > 0.75) {
+                rendition.next();
+            } else {
+                // Center tap — toggle UI
+                if (onCenterTap) onCenterTap();
+            }
+        });
+
         return () => {
             book.destroy();
             bookRef.current = null;
@@ -315,14 +334,6 @@ export default function EpubReaderMode({
                     height: "100%",
                     background: "#000",
                     overflow: "hidden",
-                }}
-                onClick={(e) => {
-                    // Click left/right edges for navigation (30% zones)
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    if (x < rect.width * 0.25) goPrev();
-                    else if (x > rect.width * 0.75) goNext();
-                    // Center tap is handled by parent for UI toggle
                 }}
             />
         </div>
