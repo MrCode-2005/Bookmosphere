@@ -79,6 +79,33 @@ export default function LibraryPage() {
                 setBooks(fetched);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 setCachedBooks(fetched as any);
+
+                // Auto-reprocess EPUB books missing covers (extracts cover from EPUB ZIP)
+                const epubsNeedingCovers = fetched.filter(
+                    (b: BookItem) => b.fileType === "EPUB" && !b.coverUrl && b.status === "READY"
+                );
+                if (epubsNeedingCovers.length > 0) {
+                    Promise.all(
+                        epubsNeedingCovers.map((b: BookItem) =>
+                            fetch(`/api/books/${b.id}/reprocess`, {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${accessToken}` },
+                            }).catch(() => { /* ignore */ })
+                        )
+                    ).then(() => {
+                        // Refetch after reprocessing to get updated coverUrls
+                        setTimeout(() => {
+                            fetch("/api/books", {
+                                headers: { Authorization: `Bearer ${accessToken}` },
+                            }).then(r => r.json()).then(d => {
+                                const updated = d.data || d.books || [];
+                                setBooks(updated);
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                setCachedBooks(updated as any);
+                            }).catch(() => { /* ignore */ });
+                        }, 3000); // Wait 3s for reprocessing to complete
+                    });
+                }
             }
         } catch {
             // Ignore
