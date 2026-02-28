@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { readFile } from "@/lib/s3";
+import { readFile, uploadFile } from "@/lib/s3";
 
 /**
  * Process a book: read file, extract pages/text, save to DB.
@@ -32,10 +32,30 @@ export async function processBook(bookId: string, storageKey: string) {
             }
 
             case "EPUB": {
-                // Parse EPUB metadata and structure
+                // Parse EPUB metadata, structure, and extract cover image
                 const epubResult = await parseEpub(buffer);
                 pdfPageCount = epubResult.estimatedPages;
                 pdfWordEstimate = epubResult.estimatedWords;
+
+                // Upload extracted cover image to storage
+                if (epubResult.coverBuffer) {
+                    try {
+                        const ext = epubResult.coverMimeType?.split("/")[1] || "jpg";
+                        const coverKey = `covers/${bookId}.${ext}`;
+                        const coverPublicUrl = await uploadFile(
+                            coverKey,
+                            epubResult.coverBuffer,
+                            epubResult.coverMimeType || "image/jpeg"
+                        );
+                        await prisma.book.update({
+                            where: { id: bookId },
+                            data: { coverUrl: coverPublicUrl },
+                        });
+                        console.log(`🖼️ Cover uploaded for book ${bookId}: ${coverPublicUrl}`);
+                    } catch (coverErr) {
+                        console.warn(`⚠️ Cover upload failed for book ${bookId}:`, coverErr);
+                    }
+                }
                 break;
             }
 
@@ -186,7 +206,12 @@ async function countPdfPages(buffer: Buffer): Promise<{ totalPages: number; esti
  * EPUBs are ZIP archives containing XHTML files.
  * Extracts text from all HTML content files for accurate word count.
  */
-async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; estimatedWords: number; coverUrl?: string }> {
+async function parseEpub(buffer: Buffer): Promise<{
+    estimatedPages: number;
+    estimatedWords: number;
+    coverBuffer?: Buffer;
+    coverMimeType?: string;
+}> {
     try {
         // EPUB files are ZIP archives — use JSZip (available from epub.js)
         const JSZip = (await import("jszip")).default;
@@ -194,6 +219,8 @@ async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; esti
 
         let totalText = "";
         let coverPath = "";
+        let coverBuffer: Buffer | undefined;
+        let coverMimeType: string | undefined;
 
         // Find the OPF file to get metadata and cover
         const containerFile = zip.file("META-INF/container.xml");
@@ -205,16 +232,56 @@ async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; esti
                 const opfFile = zip.file(opfPath);
                 if (opfFile) {
                     const opfContent = await opfFile.async("string");
-                    // Find cover image reference
+                    const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1) : "";
+
+                    // Strategy 1: <meta name="cover" content="cover-id" />
                     const coverMeta = opfContent.match(/name="cover"\s+content="([^"]+)"/);
                     if (coverMeta) {
                         const coverId = coverMeta[1];
                         const coverItem = opfContent.match(new RegExp(`id="${coverId}"[^>]+href="([^"]+)"`));
                         if (coverItem) {
-                            const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1) : "";
                             coverPath = opfDir + coverItem[1];
                         }
                     }
+
+                    // Strategy 2: look for item with properties="cover-image"
+                    if (!coverPath) {
+                        const coverImgMatch = opfContent.match(/properties="cover-image"[^>]+href="([^"]+)"/);
+                        if (coverImgMatch) {
+                            coverPath = opfDir + coverImgMatch[1];
+                        }
+                    }
+
+                    // Strategy 3: look for common cover filenames
+                    if (!coverPath) {
+                        const commonNames = ["cover.jpg", "cover.jpeg", "cover.png", "Cover.jpg", "Cover.jpeg", "Cover.png"];
+                        for (const name of commonNames) {
+                            const candidates = Object.keys(zip.files).filter(f => f.endsWith(name));
+                            if (candidates.length > 0) {
+                                coverPath = candidates[0];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Extract cover image binary
+        if (coverPath) {
+            const coverFile = zip.file(coverPath);
+            if (coverFile) {
+                try {
+                    const data = await coverFile.async("nodebuffer");
+                    coverBuffer = Buffer.from(data);
+                    const lower = coverPath.toLowerCase();
+                    if (lower.endsWith(".png")) coverMimeType = "image/png";
+                    else if (lower.endsWith(".gif")) coverMimeType = "image/gif";
+                    else if (lower.endsWith(".webp")) coverMimeType = "image/webp";
+                    else coverMimeType = "image/jpeg";
+                    console.log(`🖼️ Found cover image: ${coverPath} (${coverBuffer.length} bytes)`);
+                } catch {
+                    console.warn(`⚠️ Could not extract cover image: ${coverPath}`);
                 }
             }
         }
@@ -229,7 +296,6 @@ async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; esti
             try {
                 const content = await zip.file(fileName)?.async("string");
                 if (content) {
-                    // Strip HTML tags to get raw text
                     const text = content
                         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
                         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -251,7 +317,7 @@ async function parseEpub(buffer: Buffer): Promise<{ estimatedPages: number; esti
         const estimatedPages = Math.max(1, Math.round(words / 250));
 
         console.log(`📘 EPUB: ${words} words, ~${estimatedPages} pages (extracted from ${htmlFiles.length} HTML files)`);
-        return { estimatedPages, estimatedWords: words, coverUrl: coverPath || undefined };
+        return { estimatedPages, estimatedWords: words, coverBuffer, coverMimeType };
     } catch (err) {
         console.warn("⚠️ EPUB parsing fallback (zip extraction failed):", err);
         // Fallback: estimate from file size

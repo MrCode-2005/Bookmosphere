@@ -209,3 +209,32 @@
 .reader-mode .epub-container iframe {
     background: var(--reader-bg) !important;
 }
+
+/* ─── Hide scrollbars everywhere in reader ─── */
+.epub-reader-clean,
+.epub-reader-clean *,
+.reader-mode,
+.reader-mode * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.epub-reader-clean::-webkit-scrollbar,
+.epub-reader-clean *::-webkit-scrollbar,
+.reader-mode::-webkit-scrollbar,
+.reader-mode *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* ─── Spin animation for loading ─── */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

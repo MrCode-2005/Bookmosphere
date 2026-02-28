@@ -15,11 +15,12 @@ interface EpubReaderModeProps {
         totalPages: number;
         chapterIndex: number;
         cfi: string;
+        chapterTitle: string;
     }) => void;
     onTocReady?: (toc: TocItem[]) => void;
-    fontSize?: number;       // 17-19
-    lineHeight?: number;     // 1.6-1.75
-    maxWidth?: number;       // 680-760
+    fontSize?: number;
+    lineHeight?: number;
+    maxWidth?: number;
 }
 
 export interface TocItem {
@@ -42,10 +43,7 @@ export default function EpubReaderMode({
     const viewerRef = useRef<HTMLDivElement>(null);
     const bookRef = useRef<Book | null>(null);
     const renditionRef = useRef<Rendition | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [isReady, setIsReady] = useState(false);
-    const [chapterTitle, setChapterTitle] = useState("");
 
     const updateTheme = useCallback((rendition: Rendition) => {
         rendition.themes.default({
@@ -189,7 +187,6 @@ export default function EpubReaderMode({
         book.ready.then(() => {
             return book.locations.generate(1024);
         }).then(() => {
-            setTotalPages(Number(book.locations.length()) || 1);
             setIsReady(true);
         });
 
@@ -215,15 +212,13 @@ export default function EpubReaderMode({
             const pageNum = Number(book.locations.locationFromCfi(loc.cfi)) || 1;
             const total = Number(book.locations.length()) || 1;
 
-            setCurrentPage(pageNum);
-            setTotalPages(total);
-
             // Find chapter title
+            let chapterTitle = "";
             const navItem = book.navigation?.toc.find(
                 (item) => loc.href.includes(item.href.split("#")[0])
             );
             if (navItem) {
-                setChapterTitle(navItem.label.trim());
+                chapterTitle = navItem.label.trim();
             }
 
             if (onProgressChange) {
@@ -233,11 +228,12 @@ export default function EpubReaderMode({
                     totalPages: total,
                     chapterIndex: loc.index || 0,
                     cfi: loc.cfi,
+                    chapterTitle,
                 });
             }
         });
 
-        // Keyboard navigation
+        // Keyboard navigation inside iframe
         rendition.on("keyup", (e: KeyboardEvent) => {
             if (e.key === "ArrowRight" || e.key === "ArrowDown") {
                 rendition.next();
@@ -280,105 +276,53 @@ export default function EpubReaderMode({
     const goNext = useCallback(() => renditionRef.current?.next(), []);
     const goPrev = useCallback(() => renditionRef.current?.prev(), []);
 
-    // Navigate to specific chapter
-    const goToChapter = useCallback((href: string) => {
-        renditionRef.current?.display(href);
-    }, []);
-
-    // Navigate to CFI
-    const goToCfi = useCallback((cfi: string) => {
-        renditionRef.current?.display(cfi);
-    }, []);
-
     return (
-        <div className="reader-mode" style={{ position: "relative", width: "100%", height: "100%" }}>
-            {/* Chapter info bar */}
-            {chapterTitle && (
+        <div
+            className="epub-reader-clean"
+            style={{
+                position: "relative",
+                width: "100%",
+                height: "100%",
+                background: "#000",
+                overflow: "hidden",
+            }}
+        >
+            {/* Loading indicator */}
+            {!isReady && (
                 <div style={{
                     position: "absolute",
-                    top: 12,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    color: "#666",
-                    fontSize: 12,
-                    fontFamily: "system-ui, sans-serif",
-                    zIndex: 10,
-                    pointerEvents: "none",
-                    maxWidth: "60%",
-                    textAlign: "center",
-                    overflow: "hidden",
-                    whiteSpace: "nowrap",
-                    textOverflow: "ellipsis",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 5,
                 }}>
-                    {chapterTitle}
+                    <div style={{
+                        width: 28, height: 28,
+                        border: "2px solid #222",
+                        borderTop: "2px solid #666",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                    }} />
                 </div>
             )}
 
-            {/* EPUB render container */}
+            {/* EPUB render container — fills entire viewport, no scrollbars */}
             <div
                 ref={viewerRef}
                 style={{
                     width: "100%",
                     height: "100%",
                     background: "#000",
+                    overflow: "hidden",
                 }}
                 onClick={(e) => {
-                    // Click left/right halves for navigation
-                    const rect = (e.target as HTMLElement).getBoundingClientRect();
+                    // Click left/right edges for navigation (30% zones)
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     const x = e.clientX - rect.left;
-                    if (x < rect.width * 0.3) goPrev();
-                    else if (x > rect.width * 0.7) goNext();
-                }}
-            />
-
-            {/* Page indicator */}
-            {isReady && (
-                <div style={{
-                    position: "absolute",
-                    bottom: 12,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    color: "#444",
-                    fontSize: 11,
-                    fontFamily: "system-ui, sans-serif",
-                    zIndex: 10,
-                    pointerEvents: "none",
-                }}>
-                    {currentPage} / {totalPages}
-                </div>
-            )}
-
-            {/* Expose navigation methods via data attributes for parent */}
-            <div
-                data-epub-controls
-                style={{ display: "none" }}
-                ref={(el) => {
-                    if (el) {
-                        (el as HTMLDivElement & {
-                            goNext: () => void;
-                            goPrev: () => void;
-                            goToChapter: (href: string) => void;
-                            goToCfi: (cfi: string) => void;
-                        }).goNext = goNext;
-                        (el as HTMLDivElement & {
-                            goNext: () => void;
-                            goPrev: () => void;
-                            goToChapter: (href: string) => void;
-                            goToCfi: (cfi: string) => void;
-                        }).goPrev = goPrev;
-                        (el as HTMLDivElement & {
-                            goNext: () => void;
-                            goPrev: () => void;
-                            goToChapter: (href: string) => void;
-                            goToCfi: (cfi: string) => void;
-                        }).goToChapter = goToChapter;
-                        (el as HTMLDivElement & {
-                            goNext: () => void;
-                            goPrev: () => void;
-                            goToChapter: (href: string) => void;
-                            goToCfi: (cfi: string) => void;
-                        }).goToCfi = goToCfi;
-                    }
+                    if (x < rect.width * 0.25) goPrev();
+                    else if (x > rect.width * 0.75) goNext();
+                    // Center tap is handled by parent for UI toggle
                 }}
             />
         </div>

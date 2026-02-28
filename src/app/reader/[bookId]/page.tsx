@@ -56,6 +56,25 @@ export default function ReaderPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [readingMode, setReadingMode] = useState<ReadingMode>("reader");
     const [currentProgress, setCurrentProgress] = useState({ percentage: 0, page: 0 });
+    const [showUI, setShowUI] = useState(false);
+    const [chapterTitle, setChapterTitle] = useState("");
+    const [progressHovered, setProgressHovered] = useState(false);
+    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Toggle UI visibility (Apple Books: tap center to show/hide)
+    const toggleUI = useCallback(() => {
+        setShowUI((prev) => {
+            const next = !prev;
+            if (next) {
+                // Auto-hide after 3s
+                if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+                hideTimerRef.current = setTimeout(() => setShowUI(false), 3000);
+            } else {
+                if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+            }
+            return next;
+        });
+    }, []);
 
     // Sound
     const { play: playFlipSound, enabled: soundEnabled, toggle: toggleSound } = usePageFlipSound();
@@ -171,10 +190,12 @@ export default function ReaderPage() {
         totalPages: number;
         chapterIndex: number;
         cfi: string;
+        chapterTitle: string;
     }) => {
         setCurrentProgress({ percentage: progress.percentage, page: progress.currentPage });
         setSavedCfi(progress.cfi);
         setSavedChapter(progress.chapterIndex);
+        if (progress.chapterTitle) setChapterTitle(progress.chapterTitle);
     }, []);
 
     // Determine available URLs
@@ -213,8 +234,21 @@ export default function ReaderPage() {
 
     // ─── Render based on mode ───
     return (
-        <div ref={containerRef} className="h-screen w-screen relative" style={{ background: "#000" }}>
-            {/* Top Bar */}
+        <div ref={containerRef} className="h-screen w-screen relative" style={{ background: "#000", cursor: "default" }}>
+            {/* Center tap zone — toggles UI */}
+            <div
+                onClick={toggleUI}
+                style={{
+                    position: "absolute",
+                    top: "15%",
+                    bottom: "15%",
+                    left: "25%",
+                    right: "25%",
+                    zIndex: 30,
+                }}
+            />
+
+            {/* ═══ TOP BAR ═══ (auto-hide) */}
             <div style={{
                 position: "absolute",
                 top: 0,
@@ -224,8 +258,11 @@ export default function ReaderPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "8px 16px",
-                background: "linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)",
+                padding: "10px 16px",
+                background: "linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)",
+                opacity: showUI ? 1 : 0,
+                pointerEvents: showUI ? "auto" : "none",
+                transition: "opacity 0.3s ease",
             }}>
                 {/* Back button */}
                 <button
@@ -381,7 +418,7 @@ export default function ReaderPage() {
 
             {/* ─── READER MODE ─── */}
             {readingMode === "reader" && hasEpub && (
-                <div style={{ width: "100%", height: "100%", paddingTop: 44 }}>
+                <div style={{ width: "100%", height: "100%" }}>
                     <EpubReaderMode
                         epubUrl={epubUrl!}
                         bookId={bookId}
@@ -459,19 +496,54 @@ export default function ReaderPage() {
                 </div>
             )}
 
-            {/* Bottom progress bar */}
+            {/* ═══ BOTTOM BAR ═══ — Page number + progress bar */}
+            {/* Always-visible page number (like Apple Books) */}
             <div style={{
                 position: "absolute",
-                bottom: 0,
+                bottom: 8,
                 left: 0,
                 right: 0,
-                zIndex: 50,
-                padding: "6px 16px 8px",
-                background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+                zIndex: 45,
+                textAlign: "center",
+                opacity: showUI ? 0 : 0.5,
+                transition: "opacity 0.3s ease",
+                pointerEvents: "none",
             }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 600, margin: "0 auto" }}>
-                    <span style={{ color: "#444", fontSize: 11, fontFamily: "monospace", minWidth: 28, textAlign: "right" }}>
-                        {currentProgress.page || savedPage || 0}
+                <span style={{ color: "#555", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                    {currentProgress.page || savedPage || 1}
+                </span>
+            </div>
+
+            {/* Full progress bar (auto-hide, shown on tap) */}
+            <div
+                onMouseEnter={() => setProgressHovered(true)}
+                onMouseLeave={() => setProgressHovered(false)}
+                style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 50,
+                    padding: "12px 20px 14px",
+                    background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 70%, transparent 100%)",
+                    opacity: showUI ? 1 : 0,
+                    pointerEvents: showUI ? "auto" : "none",
+                    transition: "opacity 0.3s ease",
+                }}
+            >
+                {/* Chapter title */}
+                {chapterTitle && (
+                    <div style={{ textAlign: "center", marginBottom: 8 }}>
+                        <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif" }}>
+                            {chapterTitle}
+                        </span>
+                    </div>
+                )}
+
+                {/* Progress slider */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 500, margin: "0 auto" }}>
+                    <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20, textAlign: "right" }}>
+                        {currentProgress.page || savedPage || 1}
                     </span>
                     <div style={{
                         flex: 1,
@@ -483,19 +555,25 @@ export default function ReaderPage() {
                         <div
                             style={{
                                 height: "100%",
-                                background: "linear-gradient(to right, #6366f1, #8b5cf6)",
+                                background: "#888",
                                 borderRadius: 2,
                                 transition: "width 0.3s ease",
                                 width: `${Math.min(100, currentProgress.percentage)}%`,
                             }}
                         />
                     </div>
-                    <span style={{ color: "#444", fontSize: 11, fontFamily: "monospace", minWidth: 28 }}>
+                    <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20 }}>
                         {book.totalPages}
                     </span>
                 </div>
-                <div style={{ textAlign: "center", marginTop: 2 }}>
-                    <span style={{ color: "#333", fontSize: 10 }}>{Math.round(currentProgress.percentage)}%</span>
+
+                {/* Page info — shows "X of Y" on hover */}
+                <div style={{ textAlign: "center", marginTop: 6 }}>
+                    <span style={{ color: "#444", fontSize: 11, fontFamily: "Georgia, serif" }}>
+                        {progressHovered
+                            ? `${currentProgress.page || savedPage || 1} of ${book.totalPages}`
+                            : `${currentProgress.page || savedPage || 1}`}
+                    </span>
                 </div>
             </div>
 
