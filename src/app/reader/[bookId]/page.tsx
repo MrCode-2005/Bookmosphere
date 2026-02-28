@@ -56,7 +56,7 @@ export default function ReaderPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [readingMode, setReadingMode] = useState<ReadingMode>("reader");
     const [currentProgress, setCurrentProgress] = useState({ percentage: 0, page: 0 });
-    const [showUI, setShowUI] = useState(true);
+    const [showUI, setShowUI] = useState(false);
     const [chapterTitle, setChapterTitle] = useState("");
     const [progressHovered, setProgressHovered] = useState(false);
     const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
