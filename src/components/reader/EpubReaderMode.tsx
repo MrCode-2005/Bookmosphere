@@ -246,21 +246,34 @@ export default function EpubReaderMode({
         });
 
         // Handle clicks inside the epub iframe for center-tap UI toggle
-        rendition.on("click", (e: MouseEvent) => {
+        // Must attach directly to iframe contentDocument since iframe blocks event propagation
+        const onCenterTapRef = { current: onCenterTap };
+        const attachIframeClickHandler = () => {
             const iframe = viewerRef.current?.querySelector("iframe");
-            if (!iframe) return;
-            const rect = iframe.getBoundingClientRect();
-            const x = e.clientX;
-            const relX = x / rect.width;
-            if (relX < 0.25) {
-                rendition.prev();
-            } else if (relX > 0.75) {
-                rendition.next();
-            } else {
-                // Center tap — toggle UI
-                if (onCenterTap) onCenterTap();
-            }
+            if (!iframe?.contentDocument) return;
+
+            iframe.contentDocument.addEventListener("click", (e: MouseEvent) => {
+                const w = iframe.contentDocument?.documentElement?.clientWidth || window.innerWidth;
+                const x = e.clientX;
+                const relX = x / w;
+
+                if (relX < 0.25) {
+                    rendition.prev();
+                } else if (relX > 0.75) {
+                    rendition.next();
+                } else {
+                    // Center tap — toggle UI
+                    if (onCenterTapRef.current) onCenterTapRef.current();
+                }
+            });
+        };
+
+        // Re-attach on every new page render (epub.js recreates iframes)
+        rendition.on("rendered", () => {
+            setTimeout(attachIframeClickHandler, 100);
         });
+        // Also try immediately
+        setTimeout(attachIframeClickHandler, 500);
 
         return () => {
             book.destroy();
