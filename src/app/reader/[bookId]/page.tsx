@@ -206,6 +206,41 @@ export default function ReaderPage() {
     const conversionPending = book?.conversionStatus === "PENDING" || book?.conversionStatus === "PROCESSING";
     const conversionFailed = book?.conversionStatus === "FAILED";
 
+    // Poll conversion status for PDF books being converted
+    useEffect(() => {
+        if (!conversionPending || !bookId || !accessToken) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/books/${bookId}/convert`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const conv = data.conversion;
+
+                if (conv?.conversionStatus === "COMPLETED" && conv?.epubFileUrl) {
+                    // Conversion done! Update book state
+                    setBook((prev) => prev ? {
+                        ...prev,
+                        conversionStatus: "COMPLETED",
+                        epubFileUrl: conv.epubFileUrl,
+                    } : prev);
+                    clearInterval(interval);
+                } else if (conv?.conversionStatus === "FAILED") {
+                    setBook((prev) => prev ? {
+                        ...prev,
+                        conversionStatus: "FAILED",
+                        conversionError: conv.conversionError,
+                    } : prev);
+                    clearInterval(interval);
+                }
+            } catch { /* ignore polling errors */ }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [conversionPending, bookId, accessToken]);
+
     // ─── Loading ───
     if (loading) {
         return (

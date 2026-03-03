@@ -4,48 +4,49 @@ services:
   # ─── PostgreSQL Database ───
   postgres:
     image: postgres:16-alpine
-    container_name: bookflow-postgres
+    container_name: bookmosphere-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: bookflow
-      POSTGRES_PASSWORD: bookflow_secret
-      POSTGRES_DB: bookflow
+      POSTGRES_USER: bookmosphere
+      POSTGRES_PASSWORD: bookmosphere_secret
+      POSTGRES_DB: bookmosphere
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U bookflow']
+      test: [ 'CMD-SHELL', 'pg_isready -U bookmosphere' ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─── Redis Cache & Sessions ───
+  # ─── Redis (BullMQ Job Queue) ───
   redis:
     image: redis:7-alpine
-    container_name: bookflow-redis
+    container_name: bookmosphere-redis
     restart: unless-stopped
     ports:
       - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: [ 'CMD', 'redis-cli', 'ping' ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─── BookFlow App (Production) ───
+  # ─── Next.js App Server ───
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bookflow-app
+      target: app
+    container_name: bookmosphere-app
     restart: unless-stopped
     ports:
       - '3000:3000'
     environment:
-      - DATABASE_URL=postgresql://bookflow:bookflow_secret@postgres:5432/bookflow?schema=public
+      - DATABASE_URL=postgresql://bookmosphere:bookmosphere_secret@postgres:5432/bookmosphere?schema=public
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=production
     depends_on:
@@ -55,6 +56,34 @@ services:
         condition: service_healthy
     env_file:
       - .env
+
+  # ─── BullMQ Conversion Worker ───
+  # Processes PDF→EPUB conversion jobs using pdf-craft
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: bookmosphere-worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://bookmosphere:bookmosphere_secret@postgres:5432/bookmosphere?schema=public
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    # pdf-craft can use significant memory for OCR
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
 
 volumes:
   postgres_data:
