@@ -60,6 +60,9 @@ export default function ReaderPage() {
     const [showBottomBar, setShowBottomBar] = useState(false);
     const [chapterTitle, setChapterTitle] = useState("");
     const [progressHovered, setProgressHovered] = useState(false);
+    const [showLeftArrow, setShowLeftArrow] = useState(false);
+    const [showRightArrow, setShowRightArrow] = useState(false);
+    const epubNavRef = useRef<{ prev: () => void; next: () => void } | null>(null);
 
     // No toggleUI needed — hover zones handle visibility
 
@@ -445,9 +448,68 @@ export default function ReaderPage() {
                         initialChapter={savedChapter}
                         onProgressChange={handleEpubProgress}
                         onCenterTap={() => { }}
+                        onNavReady={(nav) => { epubNavRef.current = nav; }}
                         fontSize={fontSize}
                     />
                 </div>
+            )}
+
+            {/* ═══ SIDE NAVIGATION ARROWS ═══ (Apple Books style) */}
+            {readingMode === "reader" && (
+                <>
+                    {/* Left arrow */}
+                    <div
+                        onMouseEnter={() => setShowLeftArrow(true)}
+                        onMouseLeave={() => setShowLeftArrow(false)}
+                        onClick={() => epubNavRef.current?.prev()}
+                        style={{
+                            position: "absolute",
+                            left: 0,
+                            top: "15%",
+                            bottom: "15%",
+                            width: 60,
+                            zIndex: 40,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+                            viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="1.5"
+                            style={{ opacity: showLeftArrow ? 0.8 : 0, transition: "opacity 0.25s ease" }}
+                        >
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                    </div>
+                    {/* Right arrow */}
+                    <div
+                        onMouseEnter={() => setShowRightArrow(true)}
+                        onMouseLeave={() => setShowRightArrow(false)}
+                        onClick={() => epubNavRef.current?.next()}
+                        style={{
+                            position: "absolute",
+                            right: 0,
+                            top: "15%",
+                            bottom: "15%",
+                            width: 60,
+                            zIndex: 40,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+                            viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="1.5"
+                            style={{ opacity: showRightArrow ? 0.8 : 0, transition: "opacity 0.25s ease" }}
+                        >
+                            <polyline points="9 6 15 12 9 18" />
+                        </svg>
+                    </div>
+                </>
             )}
 
             {/* Reader Mode for PDFs — extract text and render in Apple Books typography */}
@@ -596,7 +658,7 @@ export default function ReaderPage() {
                     <div style={{ textAlign: "center", marginTop: 6 }}>
                         <span style={{ color: "#444", fontSize: 11, fontFamily: "Georgia, serif" }}>
                             {progressHovered
-                                ? `${currentProgress.page || savedPage || 1} of ${book.totalPages}`
+                                ? `Page ${currentProgress.page || savedPage || 1} of ${book.totalPages}`
                                 : `${currentProgress.page || savedPage || 1}`}
                         </span>
                     </div>

@@ -18,6 +18,7 @@ interface EpubReaderModeProps {
         chapterTitle: string;
     }) => void;
     onTocReady?: (toc: TocItem[]) => void;
+    onNavReady?: (nav: { prev: () => void; next: () => void }) => void;
     onCenterTap?: () => void;
     fontSize?: number;
     lineHeight?: number;
@@ -37,6 +38,7 @@ export default function EpubReaderMode({
     initialChapter,
     onProgressChange,
     onTocReady,
+    onNavReady,
     onCenterTap,
     fontSize = 18,
     lineHeight = 1.65,
@@ -161,10 +163,18 @@ export default function EpubReaderMode({
         const rendition = book.renderTo(viewerRef.current, {
             width: "100%",
             height: "100%",
-            flow: "scrolled-doc",
+            flow: "paginated",
             spread: "none",
         });
         renditionRef.current = rendition;
+
+        // Expose navigation to parent for side arrows
+        if (onNavReady) {
+            onNavReady({
+                prev: () => rendition.prev(),
+                next: () => rendition.next(),
+            });
+        }
 
         // Apply Apple Books dark theme
         updateTheme(rendition);
