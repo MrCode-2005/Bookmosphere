@@ -165,8 +165,27 @@ export default function EpubReaderMode({
             height: "100%",
             flow: "paginated",
             spread: "none",
+            // Force single column by limiting the rendition width
+            allowScriptedContent: true,
         });
         renditionRef.current = rendition;
+
+        // Override epub.js column CSS to force single column
+        rendition.hooks.content.register((contents: any) => {
+            const doc = contents.document;
+            const style = doc.createElement("style");
+            style.textContent = `
+                body {
+                    column-count: 1 !important;
+                    columns: 1 !important;
+                    -webkit-columns: 1 !important;
+                    -moz-columns: 1 !important;
+                    column-width: auto !important;
+                    overflow: hidden !important;
+                }
+            `;
+            doc.head.appendChild(style);
+        });
 
         // Expose navigation to parent for side arrows
         if (onNavReady) {
@@ -353,8 +372,10 @@ export default function EpubReaderMode({
             <div
                 ref={viewerRef}
                 style={{
+                    maxWidth: 800,
                     width: "100%",
                     height: "100%",
+                    margin: "0 auto",
                     background: "#000",
                     overflow: "hidden",
                 }}
