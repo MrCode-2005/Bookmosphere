@@ -56,25 +56,12 @@ export default function ReaderPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [readingMode, setReadingMode] = useState<ReadingMode>("reader");
     const [currentProgress, setCurrentProgress] = useState({ percentage: 0, page: 0 });
-    const [showUI, setShowUI] = useState(false);
+    const [showTopBar, setShowTopBar] = useState(false);
+    const [showBottomBar, setShowBottomBar] = useState(false);
     const [chapterTitle, setChapterTitle] = useState("");
     const [progressHovered, setProgressHovered] = useState(false);
-    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Toggle UI visibility (Apple Books: tap center to show/hide)
-    const toggleUI = useCallback(() => {
-        setShowUI((prev) => {
-            const next = !prev;
-            if (next) {
-                // Auto-hide after 3s
-                if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-                hideTimerRef.current = setTimeout(() => setShowUI(false), 3000);
-            } else {
-                if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-            }
-            return next;
-        });
-    }, []);
+    // No toggleUI needed — hover zones handle visibility
 
     // Sound
     const { play: playFlipSound, enabled: soundEnabled, toggle: toggleSound } = usePageFlipSound();
@@ -271,138 +258,147 @@ export default function ReaderPage() {
     return (
         <div ref={containerRef} className="h-screen w-screen relative" style={{ background: "#000", cursor: "default" }}>
 
-            {/* ═══ TOP BAR ═══ (auto-hide) */}
-            <div style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 50,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 16px",
-                background: "linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)",
-                opacity: showUI ? 1 : 0,
-                pointerEvents: showUI ? "auto" : "none",
-                transition: "opacity 0.3s ease",
-            }}>
-                {/* Back button */}
-                <button
-                    onClick={() => router.back()}
-                    style={{ color: "#888", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                    Back
-                </button>
+            {/* ═══ TOP HOVER ZONE ═══ — invisible trigger area */}
+            <div
+                onMouseEnter={() => setShowTopBar(true)}
+                onMouseLeave={() => setShowTopBar(false)}
+                style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: showTopBar ? "auto" : 60,
+                    zIndex: 60,
+                }}
+            >
+                {/* ═══ TOP BAR ═══ */}
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 16px",
+                    background: "linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)",
+                    opacity: showTopBar ? 1 : 0,
+                    pointerEvents: showTopBar ? "auto" : "none",
+                    transition: "opacity 0.3s ease",
+                }}>
+                    {/* Back button */}
+                    <button
+                        onClick={() => router.back()}
+                        style={{ color: "#888", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                        Back
+                    </button>
 
-                {/* Title */}
-                <div style={{ textAlign: "center", flex: 1, marginInline: 16 }}>
-                    <div style={{ color: "#aaa", fontSize: 13, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                        {book.title}
+                    {/* Title */}
+                    <div style={{ textAlign: "center", flex: 1, marginInline: 16 }}>
+                        <div style={{ color: "#aaa", fontSize: 13, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                            {book.title}
+                        </div>
+                        {book.author && <div style={{ color: "#555", fontSize: 11 }}>{book.author}</div>}
                     </div>
-                    {book.author && <div style={{ color: "#555", fontSize: 11 }}>{book.author}</div>}
+
+                    {/* Controls */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {/* Mode Toggle — Segmented Control */}
+                        {(hasEpub || hasPdf) && (
+                            <div style={{
+                                display: "flex",
+                                background: "#111",
+                                borderRadius: 8,
+                                border: "1px solid #333",
+                                overflow: "hidden",
+                            }}>
+                                <button
+                                    onClick={() => setReadingMode("reader")}
+                                    style={{
+                                        padding: "5px 14px",
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        cursor: "pointer",
+                                        border: "none",
+                                        background: readingMode === "reader" ? "#2563eb" : "transparent",
+                                        color: readingMode === "reader" ? "#fff" : "#666",
+                                        transition: "all 0.2s",
+                                    }}
+                                >
+                                    Reader
+                                </button>
+                                <button
+                                    onClick={() => setReadingMode("flip")}
+                                    style={{
+                                        padding: "5px 14px",
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        cursor: "pointer",
+                                        border: "none",
+                                        borderLeft: "1px solid #333",
+                                        background: readingMode === "flip" ? "#2563eb" : "transparent",
+                                        color: readingMode === "flip" ? "#fff" : "#666",
+                                        transition: "all 0.2s",
+                                    }}
+                                >
+                                    Flip
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Sound Toggle */}
+                        <button
+                            onClick={toggleSound}
+                            style={{
+                                background: "transparent",
+                                border: "1px solid #333",
+                                borderRadius: 8,
+                                padding: "4px 8px",
+                                color: soundEnabled ? "#93B5FF" : "#555",
+                                fontSize: 14,
+                                cursor: "pointer",
+                            }}
+                        >
+                            {soundEnabled ? "🔊" : "🔇"}
+                        </button>
+
+                        {/* Fullscreen */}
+                        <button
+                            onClick={toggleFullscreen}
+                            style={{
+                                background: "transparent",
+                                border: "1px solid #333",
+                                borderRadius: 8,
+                                padding: "4px 8px",
+                                color: "#888",
+                                fontSize: 14,
+                                cursor: "pointer",
+                            }}
+                        >
+                            {isFullscreen ? "⊡" : "⛶"}
+                        </button>
+
+                        {/* Font size (Reader Mode only) */}
+                        {readingMode === "reader" && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <button
+                                    onClick={() => handleFontSizeChange(-1)}
+                                    style={{ background: "transparent", border: "1px solid #333", borderRadius: 6, padding: "2px 8px", color: "#888", fontSize: 12, cursor: "pointer" }}
+                                >
+                                    A-
+                                </button>
+                                <span style={{ color: "#666", fontSize: 11, minWidth: 24, textAlign: "center" }}>{fontSize}</span>
+                                <button
+                                    onClick={() => handleFontSizeChange(1)}
+                                    style={{ background: "transparent", border: "1px solid #333", borderRadius: 6, padding: "2px 8px", color: "#888", fontSize: 12, cursor: "pointer" }}
+                                >
+                                    A+
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
-
-                {/* Controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* Mode Toggle — Segmented Control */}
-                    {(hasEpub || hasPdf) && (
-                        <div style={{
-                            display: "flex",
-                            background: "#111",
-                            borderRadius: 8,
-                            border: "1px solid #333",
-                            overflow: "hidden",
-                        }}>
-                            <button
-                                onClick={() => setReadingMode("reader")}
-                                style={{
-                                    padding: "5px 14px",
-                                    fontSize: 12,
-                                    fontWeight: 500,
-                                    cursor: "pointer",
-                                    border: "none",
-                                    background: readingMode === "reader" ? "#2563eb" : "transparent",
-                                    color: readingMode === "reader" ? "#fff" : "#666",
-                                    transition: "all 0.2s",
-                                }}
-                            >
-                                Reader
-                            </button>
-                            <button
-                                onClick={() => setReadingMode("flip")}
-                                style={{
-                                    padding: "5px 14px",
-                                    fontSize: 12,
-                                    fontWeight: 500,
-                                    cursor: "pointer",
-                                    border: "none",
-                                    borderLeft: "1px solid #333",
-                                    background: readingMode === "flip" ? "#2563eb" : "transparent",
-                                    color: readingMode === "flip" ? "#fff" : "#666",
-                                    transition: "all 0.2s",
-                                }}
-                            >
-                                Flip
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Sound Toggle */}
-                    <button
-                        onClick={toggleSound}
-                        style={{
-                            background: "transparent",
-                            border: "1px solid #333",
-                            borderRadius: 8,
-                            padding: "4px 8px",
-                            color: soundEnabled ? "#93B5FF" : "#555",
-                            fontSize: 14,
-                            cursor: "pointer",
-                        }}
-                    >
-                        {soundEnabled ? "🔊" : "🔇"}
-                    </button>
-
-                    {/* Fullscreen */}
-                    <button
-                        onClick={toggleFullscreen}
-                        style={{
-                            background: "transparent",
-                            border: "1px solid #333",
-                            borderRadius: 8,
-                            padding: "4px 8px",
-                            color: "#888",
-                            fontSize: 14,
-                            cursor: "pointer",
-                        }}
-                    >
-                        {isFullscreen ? "⊡" : "⛶"}
-                    </button>
-
-                    {/* Font size (Reader Mode only) */}
-                    {readingMode === "reader" && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <button
-                                onClick={() => handleFontSizeChange(-1)}
-                                style={{ background: "transparent", border: "1px solid #333", borderRadius: 6, padding: "2px 8px", color: "#888", fontSize: 12, cursor: "pointer" }}
-                            >
-                                A-
-                            </button>
-                            <span style={{ color: "#666", fontSize: 11, minWidth: 24, textAlign: "center" }}>{fontSize}</span>
-                            <button
-                                onClick={() => handleFontSizeChange(1)}
-                                style={{ background: "transparent", border: "1px solid #333", borderRadius: 6, padding: "2px 8px", color: "#888", fontSize: 12, cursor: "pointer" }}
-                            >
-                                A+
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+            </div> {/* end top hover zone */}
 
             {/* Conversion banner */}
             {conversionPending && readingMode === "reader" && !hasEpub && (
@@ -448,7 +444,7 @@ export default function ReaderPage() {
                         initialCfi={savedCfi}
                         initialChapter={savedChapter}
                         onProgressChange={handleEpubProgress}
-                        onCenterTap={toggleUI}
+                        onCenterTap={() => { }}
                         fontSize={fontSize}
                     />
                 </div>
@@ -521,7 +517,7 @@ export default function ReaderPage() {
             )}
 
             {/* ═══ BOTTOM BAR ═══ — Page number + progress bar */}
-            {/* Always-visible page number (like Apple Books) */}
+            {/* Always-visible page number when bottom bar is hidden */}
             <div style={{
                 position: "absolute",
                 bottom: 8,
@@ -529,7 +525,7 @@ export default function ReaderPage() {
                 right: 0,
                 zIndex: 45,
                 textAlign: "center",
-                opacity: showUI ? 0 : 0.5,
+                opacity: showBottomBar ? 0 : 0.5,
                 transition: "opacity 0.3s ease",
                 pointerEvents: "none",
             }}>
@@ -539,67 +535,73 @@ export default function ReaderPage() {
             </div>
 
             {/* Full progress bar (auto-hide, shown on tap) */}
+            {/* Bottom hover zone — invisible trigger always receives hover */}
             <div
-                onMouseEnter={() => setProgressHovered(true)}
-                onMouseLeave={() => setProgressHovered(false)}
+                onMouseEnter={() => { setShowBottomBar(true); setProgressHovered(true); }}
+                onMouseLeave={() => { setShowBottomBar(false); setProgressHovered(false); }}
                 style={{
                     position: "absolute",
                     bottom: 0,
                     left: 0,
                     right: 0,
+                    height: showBottomBar ? "auto" : 60,
                     zIndex: 50,
-                    padding: "12px 20px 14px",
-                    background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 70%, transparent 100%)",
-                    opacity: showUI ? 1 : 0,
-                    pointerEvents: showUI ? "auto" : "none",
-                    transition: "opacity 0.3s ease",
                 }}
             >
-                {/* Chapter title */}
-                {chapterTitle && (
-                    <div style={{ textAlign: "center", marginBottom: 8 }}>
-                        <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif" }}>
-                            {chapterTitle}
+                <div style={{
+                    padding: "12px 20px 14px",
+                    background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 70%, transparent 100%)",
+                    opacity: showBottomBar ? 1 : 0,
+                    pointerEvents: showBottomBar ? "auto" : "none",
+                    transition: "opacity 0.3s ease",
+                }}
+                >
+                    {/* Chapter title */}
+                    {chapterTitle && (
+                        <div style={{ textAlign: "center", marginBottom: 8 }}>
+                            <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif" }}>
+                                {chapterTitle}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Progress slider */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 500, margin: "0 auto" }}>
+                        <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20, textAlign: "right" }}>
+                            {currentProgress.page || savedPage || 1}
+                        </span>
+                        <div style={{
+                            flex: 1,
+                            height: 3,
+                            background: "#222",
+                            borderRadius: 2,
+                            overflow: "hidden",
+                        }}>
+                            <div
+                                style={{
+                                    height: "100%",
+                                    background: "#888",
+                                    borderRadius: 2,
+                                    transition: "width 0.3s ease",
+                                    width: `${Math.min(100, currentProgress.percentage)}%`,
+                                }}
+                            />
+                        </div>
+                        <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20 }}>
+                            {book.totalPages}
                         </span>
                     </div>
-                )}
 
-                {/* Progress slider */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 500, margin: "0 auto" }}>
-                    <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20, textAlign: "right" }}>
-                        {currentProgress.page || savedPage || 1}
-                    </span>
-                    <div style={{
-                        flex: 1,
-                        height: 3,
-                        background: "#222",
-                        borderRadius: 2,
-                        overflow: "hidden",
-                    }}>
-                        <div
-                            style={{
-                                height: "100%",
-                                background: "#888",
-                                borderRadius: 2,
-                                transition: "width 0.3s ease",
-                                width: `${Math.min(100, currentProgress.percentage)}%`,
-                            }}
-                        />
+                    {/* Page info — shows "X of Y" on hover */}
+                    <div style={{ textAlign: "center", marginTop: 6 }}>
+                        <span style={{ color: "#444", fontSize: 11, fontFamily: "Georgia, serif" }}>
+                            {progressHovered
+                                ? `${currentProgress.page || savedPage || 1} of ${book.totalPages}`
+                                : `${currentProgress.page || savedPage || 1}`}
+                        </span>
                     </div>
-                    <span style={{ color: "#555", fontSize: 11, fontFamily: "Georgia, serif", minWidth: 20 }}>
-                        {book.totalPages}
-                    </span>
-                </div>
-
-                {/* Page info — shows "X of Y" on hover */}
-                <div style={{ textAlign: "center", marginTop: 6 }}>
-                    <span style={{ color: "#444", fontSize: 11, fontFamily: "Georgia, serif" }}>
-                        {progressHovered
-                            ? `${currentProgress.page || savedPage || 1} of ${book.totalPages}`
-                            : `${currentProgress.page || savedPage || 1}`}
-                    </span>
-                </div>
-            </div>
+                </div> {/* end inner bottom bar */}
+            </div> {/* end bottom hover zone */}
 
             {/* Auto-save provider */}
             <AutoSaveProvider bookId={bookId} totalPages={book.totalPages} totalWords={book.totalWords} />
