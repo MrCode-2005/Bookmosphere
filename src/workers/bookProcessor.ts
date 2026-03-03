@@ -114,12 +114,13 @@ export async function processBook(bookId: string, storageKey: string) {
             try {
                 await prisma.book.update({
                     where: { id: bookId },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     data: {
                         ...coreUpdate,
                         originalFormat: "PDF",
                         pdfFileUrl: publicUrl,
                         conversionStatus: "PENDING",
-                    },
+                    } as any,
                 });
             } catch {
                 // New fields not in DB yet — fall back to core update only
@@ -147,12 +148,13 @@ export async function processBook(bookId: string, storageKey: string) {
             try {
                 await prisma.book.update({
                     where: { id: bookId },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     data: {
                         ...coreUpdate,
                         originalFormat: "EPUB",
                         epubFileUrl: publicUrl,
                         conversionStatus: "NONE",
-                    },
+                    } as any,
                 });
             } catch {
                 // New fields not in DB yet — fall back to core update only
