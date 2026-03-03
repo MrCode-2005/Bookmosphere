@@ -42,7 +42,6 @@ export default function EpubReaderMode({
     onCenterTap,
     fontSize = 18,
     lineHeight = 1.65,
-    maxWidth = 720,
 }: EpubReaderModeProps) {
     const viewerRef = useRef<HTMLDivElement>(null);
     const bookRef = useRef<Book | null>(null);
@@ -57,9 +56,8 @@ export default function EpubReaderMode({
                 "font-family": "Georgia, 'Times New Roman', serif !important",
                 "font-size": `${fontSize}px !important`,
                 "line-height": `${lineHeight} !important`,
-                "max-width": `${maxWidth}px !important`,
-                "margin": "0 auto !important",
-                "padding": "40px 20px !important",
+                "margin": "0 !important",
+                "padding": "40px 60px !important",
                 "-webkit-font-smoothing": "antialiased",
             },
             "p": {
@@ -152,40 +150,29 @@ export default function EpubReaderMode({
                 "font-size": "0.85em !important",
             },
         });
-    }, [fontSize, lineHeight, maxWidth]);
+    }, [fontSize, lineHeight]);
 
     useEffect(() => {
         if (!viewerRef.current || !epubUrl) return;
+
+        // Measure the actual pixel dimensions of the container
+        // This is critical: epub.js paginated mode uses CSS columns internally.
+        // If we pass "100%" it calculates multiple columns based on viewport width.
+        // By passing the exact pixel width, it creates exactly ONE column = one page.
+        const rect = viewerRef.current.getBoundingClientRect();
+        const containerWidth = Math.floor(rect.width);
+        const containerHeight = Math.floor(rect.height);
 
         const book = ePub(epubUrl);
         bookRef.current = book;
 
         const rendition = book.renderTo(viewerRef.current, {
-            width: "100%",
-            height: "100%",
+            width: containerWidth,
+            height: containerHeight,
             flow: "paginated",
             spread: "none",
-            // Force single column by limiting the rendition width
-            allowScriptedContent: true,
         });
         renditionRef.current = rendition;
-
-        // Override epub.js column CSS to force single column
-        rendition.hooks.content.register((contents: any) => {
-            const doc = contents.document;
-            const style = doc.createElement("style");
-            style.textContent = `
-                body {
-                    column-count: 1 !important;
-                    columns: 1 !important;
-                    -webkit-columns: 1 !important;
-                    -moz-columns: 1 !important;
-                    column-width: auto !important;
-                    overflow: hidden !important;
-                }
-            `;
-            doc.head.appendChild(style);
-        });
 
         // Expose navigation to parent for side arrows
         if (onNavReady) {
@@ -274,8 +261,7 @@ export default function EpubReaderMode({
             }
         });
 
-        // Handle clicks inside the epub iframe for center-tap UI toggle
-        // Must attach directly to iframe contentDocument since iframe blocks event propagation
+        // Handle clicks inside the epub iframe for navigation
         const onCenterTapRef = { current: onCenterTap };
         const attachIframeClickHandler = () => {
             const iframe = viewerRef.current?.querySelector("iframe");
@@ -291,20 +277,26 @@ export default function EpubReaderMode({
                 } else if (relX > 0.75) {
                     rendition.next();
                 } else {
-                    // Center tap — toggle UI
                     if (onCenterTapRef.current) onCenterTapRef.current();
                 }
             });
         };
 
-        // Re-attach on every new page render (epub.js recreates iframes)
         rendition.on("rendered", () => {
             setTimeout(attachIframeClickHandler, 100);
         });
-        // Also try immediately
         setTimeout(attachIframeClickHandler, 500);
 
+        // Handle window resize — update rendition size
+        const handleResize = () => {
+            if (!viewerRef.current || !renditionRef.current) return;
+            const r = viewerRef.current.getBoundingClientRect();
+            renditionRef.current.resize(Math.floor(r.width), Math.floor(r.height));
+        };
+        window.addEventListener("resize", handleResize);
+
         return () => {
+            window.removeEventListener("resize", handleResize);
             book.destroy();
             bookRef.current = null;
             renditionRef.current = null;
@@ -317,7 +309,7 @@ export default function EpubReaderMode({
         if (renditionRef.current) {
             updateTheme(renditionRef.current);
         }
-    }, [fontSize, lineHeight, maxWidth, updateTheme]);
+    }, [fontSize, lineHeight, updateTheme]);
 
     // Global keyboard handler
     useEffect(() => {
@@ -333,9 +325,6 @@ export default function EpubReaderMode({
         document.addEventListener("keydown", handleKey);
         return () => document.removeEventListener("keydown", handleKey);
     }, []);
-
-    const goNext = useCallback(() => renditionRef.current?.next(), []);
-    const goPrev = useCallback(() => renditionRef.current?.prev(), []);
 
     return (
         <div
@@ -368,14 +357,12 @@ export default function EpubReaderMode({
                 </div>
             )}
 
-            {/* EPUB render container — fills entire viewport, no scrollbars */}
+            {/* EPUB render container — full width, full height */}
             <div
                 ref={viewerRef}
                 style={{
-                    maxWidth: 800,
                     width: "100%",
                     height: "100%",
-                    margin: "0 auto",
                     background: "#000",
                     overflow: "hidden",
                 }}
